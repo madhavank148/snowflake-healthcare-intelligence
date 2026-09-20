@@ -1,9 +1,473 @@
 -- ============================================================================
 -- 05_access.sql
--- ACCESS schema is created in 01_setup.sql.
+-- ACCESS schema: consumption views on top of FOUNDATION.
 --
--- Out of scope for this setup pass: this is where the RLS-governed,
--- denormalized consumption views per data product (e.g. VW_VISITS,
--- VW_DIAGNOSES) will live once FOUNDATION has real data loaded and the
--- semantic model layer is being built. Placeholder only.
+-- Section 1: plain 1:1 views, one per resource type -- the simplest possible
+-- front door for a consumer that just wants a resource's FOUNDATION table
+-- under a stable ACCESS.<RESOURCE>_VIEW name (this is where RLS would later
+-- be layered in, per Poc.html's "16 denormalized views, RLS-governed").
+--
+-- Section 2: clubbed views -- join a couple of resource types together for
+-- the common "give me X with its Y" consumption pattern. FHIR references
+-- (e.g. Encounter.subject.reference = "Patient/<id>") are matched by
+-- stripping the resource-type prefix and comparing to FOUNDATION.*.RESOURCE_ID.
 -- ============================================================================
+
+USE DATABASE HEALTHCARE_INTELLIGENCE_DB;
+USE SCHEMA ACCESS;
+
+-- ---------------------------------------------------------------------------
+-- Section 1: plain per-resource views
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE VIEW ACCESS.PATIENT_VIEW AS
+SELECT * FROM FOUNDATION.PATIENT;
+
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_VIEW AS
+SELECT * FROM FOUNDATION.ENCOUNTER;
+
+CREATE OR REPLACE VIEW ACCESS.CONDITION_VIEW AS
+SELECT * FROM FOUNDATION.CONDITION;
+
+CREATE OR REPLACE VIEW ACCESS.OBSERVATION_VIEW AS
+SELECT * FROM FOUNDATION.OBSERVATION;
+
+CREATE OR REPLACE VIEW ACCESS.PROCEDURE_VIEW AS
+SELECT * FROM FOUNDATION.PROCEDURE;
+
+CREATE OR REPLACE VIEW ACCESS.CLAIM_VIEW AS
+SELECT * FROM FOUNDATION.CLAIM;
+
+CREATE OR REPLACE VIEW ACCESS.EXPLANATION_OF_BENEFIT_VIEW AS
+SELECT * FROM FOUNDATION.EXPLANATION_OF_BENEFIT;
+
+CREATE OR REPLACE VIEW ACCESS.DIAGNOSTIC_REPORT_VIEW AS
+SELECT * FROM FOUNDATION.DIAGNOSTIC_REPORT;
+
+CREATE OR REPLACE VIEW ACCESS.DOCUMENT_REFERENCE_VIEW AS
+SELECT * FROM FOUNDATION.DOCUMENT_REFERENCE;
+
+CREATE OR REPLACE VIEW ACCESS.IMMUNIZATION_VIEW AS
+SELECT * FROM FOUNDATION.IMMUNIZATION;
+
+CREATE OR REPLACE VIEW ACCESS.MEDICATION_REQUEST_VIEW AS
+SELECT * FROM FOUNDATION.MEDICATION_REQUEST;
+
+CREATE OR REPLACE VIEW ACCESS.MEDICATION_VIEW AS
+SELECT * FROM FOUNDATION.MEDICATION;
+
+CREATE OR REPLACE VIEW ACCESS.MEDICATION_ADMINISTRATION_VIEW AS
+SELECT * FROM FOUNDATION.MEDICATION_ADMINISTRATION;
+
+CREATE OR REPLACE VIEW ACCESS.CARE_TEAM_VIEW AS
+SELECT * FROM FOUNDATION.CARE_TEAM;
+
+CREATE OR REPLACE VIEW ACCESS.CARE_PLAN_VIEW AS
+SELECT * FROM FOUNDATION.CARE_PLAN;
+
+CREATE OR REPLACE VIEW ACCESS.SUPPLY_DELIVERY_VIEW AS
+SELECT * FROM FOUNDATION.SUPPLY_DELIVERY;
+
+CREATE OR REPLACE VIEW ACCESS.PROVENANCE_VIEW AS
+SELECT * FROM FOUNDATION.PROVENANCE;
+
+CREATE OR REPLACE VIEW ACCESS.ALLERGY_INTOLERANCE_VIEW AS
+SELECT * FROM FOUNDATION.ALLERGY_INTOLERANCE;
+
+CREATE OR REPLACE VIEW ACCESS.DEVICE_VIEW AS
+SELECT * FROM FOUNDATION.DEVICE;
+
+CREATE OR REPLACE VIEW ACCESS.IMAGING_STUDY_VIEW AS
+SELECT * FROM FOUNDATION.IMAGING_STUDY;
+
+-- ---------------------------------------------------------------------------
+-- Section 2: clubbed (joined) views
+-- ---------------------------------------------------------------------------
+
+-- Patient + Encounter: one row per visit, with the patient it belongs to.
+CREATE OR REPLACE VIEW ACCESS.PATIENT_ENCOUNTER_VIEW AS
+SELECT
+    p.RESOURCE_ID          AS PATIENT_ID,
+    p.FHIR_NAME             AS PATIENT_NAME,
+    p.FHIR_GENDER           AS PATIENT_GENDER,
+    p.FHIR_BIRTHDATE        AS PATIENT_BIRTHDATE,
+    e.RESOURCE_ID           AS ENCOUNTER_ID,
+    e.FHIR_STATUS           AS ENCOUNTER_STATUS,
+    e.FHIR_CLASS            AS ENCOUNTER_CLASS,
+    e.FHIR_TYPE             AS ENCOUNTER_TYPE,
+    e.FHIR_PERIOD           AS ENCOUNTER_PERIOD,
+    e.FHIR_REASONCODE       AS ENCOUNTER_REASON,
+    e.FHIR_SERVICEPROVIDER  AS ENCOUNTER_SERVICE_PROVIDER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.ENCOUNTER e
+    ON e.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + Condition: diagnoses per patient, with the encounter they were recorded at.
+CREATE OR REPLACE VIEW ACCESS.PATIENT_CONDITION_VIEW AS
+SELECT
+    p.RESOURCE_ID              AS PATIENT_ID,
+    p.FHIR_NAME                 AS PATIENT_NAME,
+    c.RESOURCE_ID               AS CONDITION_ID,
+    c.FHIR_CODE                 AS CONDITION_CODE,
+    c.FHIR_CLINICALSTATUS       AS CONDITION_CLINICAL_STATUS,
+    c.FHIR_VERIFICATIONSTATUS   AS CONDITION_VERIFICATION_STATUS,
+    c.FHIR_ONSETDATETIME        AS CONDITION_ONSET,
+    c.FHIR_ABATEMENTDATETIME    AS CONDITION_ABATEMENT,
+    c.FHIR_RECORDEDDATE         AS CONDITION_RECORDED_DATE,
+    c.FHIR_ENCOUNTER            AS CONDITION_ENCOUNTER_REF
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.CONDITION c
+    ON c.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + Observation: labs/vitals per patient.
+CREATE OR REPLACE VIEW ACCESS.PATIENT_OBSERVATION_VIEW AS
+SELECT
+    p.RESOURCE_ID               AS PATIENT_ID,
+    p.FHIR_NAME                  AS PATIENT_NAME,
+    o.RESOURCE_ID                AS OBSERVATION_ID,
+    o.FHIR_CODE                  AS OBSERVATION_CODE,
+    o.FHIR_CATEGORY               AS OBSERVATION_CATEGORY,
+    o.FHIR_STATUS                 AS OBSERVATION_STATUS,
+    o.FHIR_EFFECTIVEDATETIME      AS OBSERVATION_EFFECTIVE_DATETIME,
+    o.FHIR_VALUEQUANTITY          AS OBSERVATION_VALUE_QUANTITY,
+    o.FHIR_VALUECODEABLECONCEPT   AS OBSERVATION_VALUE_CODEABLE_CONCEPT,
+    o.FHIR_VALUESTRING            AS OBSERVATION_VALUE_STRING,
+    o.FHIR_COMPONENT               AS OBSERVATION_COMPONENT
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.OBSERVATION o
+    ON o.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + MedicationRequest: prescriptions per patient.
+CREATE OR REPLACE VIEW ACCESS.PATIENT_MEDICATION_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    m.RESOURCE_ID                       AS MEDICATION_REQUEST_ID,
+    m.FHIR_MEDICATIONCODEABLECONCEPT    AS MEDICATION_CODE,
+    m.FHIR_STATUS                       AS MEDICATION_STATUS,
+    m.FHIR_INTENT                       AS MEDICATION_INTENT,
+    m.FHIR_AUTHOREDON                   AS MEDICATION_AUTHORED_ON,
+    m.FHIR_DOSAGEINSTRUCTION            AS MEDICATION_DOSAGE_INSTRUCTION,
+    m.FHIR_REASONCODE                   AS MEDICATION_REASON
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.MEDICATION_REQUEST m
+    ON m.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + Claim: billing per patient (Claim uses a "patient" field, not "subject").
+CREATE OR REPLACE VIEW ACCESS.PATIENT_CLAIM_VIEW AS
+SELECT
+    p.RESOURCE_ID          AS PATIENT_ID,
+    p.FHIR_NAME              AS PATIENT_NAME,
+    cl.RESOURCE_ID           AS CLAIM_ID,
+    cl.FHIR_STATUS           AS CLAIM_STATUS,
+    cl.FHIR_TYPE             AS CLAIM_TYPE,
+    cl.FHIR_BILLABLEPERIOD   AS CLAIM_BILLABLE_PERIOD,
+    cl.FHIR_TOTAL             AS CLAIM_TOTAL,
+    cl.FHIR_DIAGNOSIS         AS CLAIM_DIAGNOSIS,
+    cl.FHIR_PROCEDURE         AS CLAIM_PROCEDURE
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.CLAIM cl
+    ON cl.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- ---------------------------------------------------------------------------
+-- Section 3: more Patient-clubbed views, one per remaining resource type that
+-- links back to a patient (via "subject" or "patient" depending on the FHIR
+-- resource -- Claim/ExplanationOfBenefit/Immunization/AllergyIntolerance/
+-- Device/SupplyDelivery use "patient"; everything else uses "subject").
+-- ---------------------------------------------------------------------------
+
+-- Patient + Procedure
+CREATE OR REPLACE VIEW ACCESS.PATIENT_PROCEDURE_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS PROCEDURE_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_PERFORMEDPERIOD        AS PERFORMEDPERIOD,
+    r.FHIR_REASONCODE             AS REASONCODE,
+    r.FHIR_ENCOUNTER              AS ENCOUNTER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.PROCEDURE r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + Immunization
+CREATE OR REPLACE VIEW ACCESS.PATIENT_IMMUNIZATION_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS IMMUNIZATION_ID,
+    r.FHIR_VACCINECODE            AS VACCINECODE,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_OCCURRENCEDATETIME     AS OCCURRENCEDATETIME,
+    r.FHIR_ENCOUNTER              AS ENCOUNTER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.IMMUNIZATION r
+    ON r.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + DiagnosticReport
+CREATE OR REPLACE VIEW ACCESS.PATIENT_DIAGNOSTIC_REPORT_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS DIAGNOSTIC_REPORT_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_CATEGORY               AS CATEGORY,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_EFFECTIVEDATETIME      AS EFFECTIVEDATETIME,
+    r.FHIR_RESULT                 AS RESULT,
+    r.FHIR_ENCOUNTER              AS ENCOUNTER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.DIAGNOSTIC_REPORT r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + DocumentReference
+CREATE OR REPLACE VIEW ACCESS.PATIENT_DOCUMENT_REFERENCE_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS DOCUMENT_REFERENCE_ID,
+    r.FHIR_TYPE                   AS TYPE,
+    r.FHIR_CATEGORY               AS CATEGORY,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_DATE                   AS DATE,
+    r.FHIR_CONTENT                AS CONTENT
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.DOCUMENT_REFERENCE r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + AllergyIntolerance
+CREATE OR REPLACE VIEW ACCESS.PATIENT_ALLERGY_INTOLERANCE_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS ALLERGY_INTOLERANCE_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_CLINICALSTATUS         AS CLINICALSTATUS,
+    r.FHIR_CRITICALITY            AS CRITICALITY,
+    r.FHIR_REACTION               AS REACTION,
+    r.FHIR_RECORDEDDATE           AS RECORDEDDATE
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.ALLERGY_INTOLERANCE r
+    ON r.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + CareTeam
+CREATE OR REPLACE VIEW ACCESS.PATIENT_CARE_TEAM_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS CARE_TEAM_ID,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_PARTICIPANT            AS PARTICIPANT,
+    r.FHIR_PERIOD                 AS PERIOD,
+    r.FHIR_ENCOUNTER              AS ENCOUNTER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.CARE_TEAM r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + CarePlan
+CREATE OR REPLACE VIEW ACCESS.PATIENT_CARE_PLAN_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS CARE_PLAN_ID,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_CATEGORY               AS CATEGORY,
+    r.FHIR_PERIOD                 AS PERIOD,
+    r.FHIR_ACTIVITY               AS ACTIVITY,
+    r.FHIR_ENCOUNTER              AS ENCOUNTER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.CARE_PLAN r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + Device
+CREATE OR REPLACE VIEW ACCESS.PATIENT_DEVICE_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS DEVICE_ID,
+    r.FHIR_DEVICENAME             AS DEVICENAME,
+    r.FHIR_TYPE                   AS TYPE,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_MANUFACTUREDATE        AS MANUFACTUREDATE,
+    r.FHIR_EXPIRATIONDATE         AS EXPIRATIONDATE
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.DEVICE r
+    ON r.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + ImagingStudy
+CREATE OR REPLACE VIEW ACCESS.PATIENT_IMAGING_STUDY_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS IMAGING_STUDY_ID,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_STARTED                AS STARTED,
+    r.FHIR_PROCEDURECODE          AS PROCEDURECODE,
+    r.FHIR_NUMBEROFSERIES         AS NUMBEROFSERIES,
+    r.FHIR_NUMBEROFINSTANCES      AS NUMBEROFINSTANCES,
+    r.FHIR_ENCOUNTER              AS ENCOUNTER
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.IMAGING_STUDY r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + SupplyDelivery
+CREATE OR REPLACE VIEW ACCESS.PATIENT_SUPPLY_DELIVERY_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS SUPPLY_DELIVERY_ID,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_TYPE                   AS TYPE,
+    r.FHIR_SUPPLIEDITEM           AS SUPPLIEDITEM,
+    r.FHIR_OCCURRENCEDATETIME     AS OCCURRENCEDATETIME
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.SUPPLY_DELIVERY r
+    ON r.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + MedicationAdministration
+CREATE OR REPLACE VIEW ACCESS.PATIENT_MEDICATION_ADMINISTRATION_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS MEDICATION_ADMINISTRATION_ID,
+    r.FHIR_MEDICATIONCODEABLECONCEPT   AS MEDICATIONCODEABLECONCEPT,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_EFFECTIVEDATETIME      AS EFFECTIVEDATETIME,
+    r.FHIR_REASONCODE             AS REASONCODE
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.MEDICATION_ADMINISTRATION r
+    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+-- Patient + ExplanationOfBenefit
+CREATE OR REPLACE VIEW ACCESS.PATIENT_EXPLANATION_OF_BENEFIT_VIEW AS
+SELECT
+    p.RESOURCE_ID                      AS PATIENT_ID,
+    p.FHIR_NAME                         AS PATIENT_NAME,
+    r.RESOURCE_ID                    AS EXPLANATION_OF_BENEFIT_ID,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_TYPE                   AS TYPE,
+    r.FHIR_BILLABLEPERIOD         AS BILLABLEPERIOD,
+    r.FHIR_TOTAL                  AS TOTAL,
+    r.FHIR_OUTCOME                AS OUTCOME,
+    r.FHIR_CLAIM                  AS CLAIM
+FROM FOUNDATION.PATIENT p
+JOIN FOUNDATION.EXPLANATION_OF_BENEFIT r
+    ON r.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+
+
+-- ---------------------------------------------------------------------------
+-- Section 4: Encounter-clubbed views -- "what happened during this visit"
+-- (matches the Poc.html Visits Agent's data product).
+-- ---------------------------------------------------------------------------
+
+-- Encounter + Condition
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_CONDITION_VIEW AS
+SELECT
+    e.RESOURCE_ID                      AS ENCOUNTER_ID,
+    e.FHIR_PERIOD                      AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE                        AS ENCOUNTER_TYPE,
+    r.RESOURCE_ID                    AS CONDITION_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_CLINICALSTATUS         AS CLINICALSTATUS,
+    r.FHIR_ONSETDATETIME          AS ONSETDATETIME,
+    r.FHIR_RECORDEDDATE           AS RECORDEDDATE
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.CONDITION r
+    ON r.FHIR_ENCOUNTER:reference::VARCHAR = 'Encounter/' || e.RESOURCE_ID;
+
+-- Encounter + Procedure
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_PROCEDURE_VIEW AS
+SELECT
+    e.RESOURCE_ID                      AS ENCOUNTER_ID,
+    e.FHIR_PERIOD                      AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE                        AS ENCOUNTER_TYPE,
+    r.RESOURCE_ID                    AS PROCEDURE_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_PERFORMEDPERIOD        AS PERFORMEDPERIOD
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.PROCEDURE r
+    ON r.FHIR_ENCOUNTER:reference::VARCHAR = 'Encounter/' || e.RESOURCE_ID;
+
+-- Encounter + Observation
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_OBSERVATION_VIEW AS
+SELECT
+    e.RESOURCE_ID                      AS ENCOUNTER_ID,
+    e.FHIR_PERIOD                      AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE                        AS ENCOUNTER_TYPE,
+    r.RESOURCE_ID                    AS OBSERVATION_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_CATEGORY               AS CATEGORY,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_VALUEQUANTITY          AS VALUEQUANTITY,
+    r.FHIR_VALUECODEABLECONCEPT   AS VALUECODEABLECONCEPT,
+    r.FHIR_VALUESTRING            AS VALUESTRING
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.OBSERVATION r
+    ON r.FHIR_ENCOUNTER:reference::VARCHAR = 'Encounter/' || e.RESOURCE_ID;
+
+-- Encounter + DiagnosticReport
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_DIAGNOSTIC_REPORT_VIEW AS
+SELECT
+    e.RESOURCE_ID                      AS ENCOUNTER_ID,
+    e.FHIR_PERIOD                      AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE                        AS ENCOUNTER_TYPE,
+    r.RESOURCE_ID                    AS DIAGNOSTIC_REPORT_ID,
+    r.FHIR_CODE                   AS CODE,
+    r.FHIR_CATEGORY               AS CATEGORY,
+    r.FHIR_STATUS                 AS STATUS,
+    r.FHIR_RESULT                 AS RESULT
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.DIAGNOSTIC_REPORT r
+    ON r.FHIR_ENCOUNTER:reference::VARCHAR = 'Encounter/' || e.RESOURCE_ID;
+
+
+-- ---------------------------------------------------------------------------
+-- Section 5: billing chain -- Claim + the ExplanationOfBenefit adjudicating it.
+-- ---------------------------------------------------------------------------
+
+-- Claim + ExplanationOfBenefit
+CREATE OR REPLACE VIEW ACCESS.CLAIM_EXPLANATION_OF_BENEFIT_VIEW AS
+SELECT
+    cl.RESOURCE_ID          AS CLAIM_ID,
+    cl.FHIR_STATUS           AS CLAIM_STATUS,
+    cl.FHIR_TYPE             AS CLAIM_TYPE,
+    cl.FHIR_TOTAL             AS CLAIM_TOTAL,
+    eob.RESOURCE_ID           AS EOB_ID,
+    eob.FHIR_STATUS            AS EOB_STATUS,
+    eob.FHIR_OUTCOME           AS EOB_OUTCOME,
+    eob.FHIR_TOTAL              AS EOB_TOTAL,
+    eob.FHIR_PAYMENT            AS EOB_PAYMENT
+FROM FOUNDATION.CLAIM cl
+JOIN FOUNDATION.EXPLANATION_OF_BENEFIT eob
+    ON eob.FHIR_CLAIM:reference::VARCHAR = 'Claim/' || cl.RESOURCE_ID;
+
+
+-- ---------------------------------------------------------------------------
+-- Section 6: Patient 360, expanded with every clubbed resource count.
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE VIEW ACCESS.PATIENT_360_VIEW AS
+SELECT
+    p.RESOURCE_ID    AS PATIENT_ID,
+    p.FHIR_NAME        AS PATIENT_NAME,
+    p.FHIR_GENDER       AS PATIENT_GENDER,
+    p.FHIR_BIRTHDATE    AS PATIENT_BIRTHDATE,
+    (SELECT COUNT(*) FROM FOUNDATION.ENCOUNTER e  WHERE e.FHIR_SUBJECT:reference::VARCHAR  = 'Patient/' || p.RESOURCE_ID) AS ENCOUNTER_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.CONDITION c  WHERE c.FHIR_SUBJECT:reference::VARCHAR  = 'Patient/' || p.RESOURCE_ID) AS CONDITION_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.OBSERVATION o WHERE o.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS OBSERVATION_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.PROCEDURE pr  WHERE pr.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS PROCEDURE_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.MEDICATION_REQUEST m WHERE m.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS MEDICATION_REQUEST_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.CLAIM cl      WHERE cl.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS CLAIM_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.IMMUNIZATION imm WHERE imm.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS IMMUNIZATION_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.DIAGNOSTIC_REPORT dia WHERE dia.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS DIAGNOSTIC_REPORT_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.DOCUMENT_REFERENCE doc WHERE doc.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS DOCUMENT_REFERENCE_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.ALLERGY_INTOLERANCE alg WHERE alg.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS ALLERGY_INTOLERANCE_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.CARE_TEAM car WHERE car.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS CARE_TEAM_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.CARE_PLAN car WHERE car.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS CARE_PLAN_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.DEVICE dev WHERE dev.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS DEVICE_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.IMAGING_STUDY ima WHERE ima.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS IMAGING_STUDY_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.SUPPLY_DELIVERY sup WHERE sup.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS SUPPLY_DELIVERY_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.MEDICATION_ADMINISTRATION med WHERE med.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS MEDICATION_ADMINISTRATION_COUNT,
+    (SELECT COUNT(*) FROM FOUNDATION.EXPLANATION_OF_BENEFIT exp WHERE exp.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS EXPLANATION_OF_BENEFIT_COUNT
+FROM FOUNDATION.PATIENT p;
