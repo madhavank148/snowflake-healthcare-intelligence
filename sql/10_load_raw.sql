@@ -6,9 +6,8 @@
 -- (resourceType = "Bundle"): 109 per-patient clinical bundles plus two
 -- reference bundles (hospitalInformation... -> Organization/Location,
 -- practitionerInformation... -> Practitioner/PractitionerRole). All of them
--- load the same way here; FOUNDATION only has tables for the 20 clinical
--- resource types, so Organization/Location/Practitioner/PractitionerRole
--- rows stay recoverable in RAW.BUNDLE_JSON without a FOUNDATION split for now.
+-- load the same way here; FOUNDATION has tables for all 24 resource types
+-- found in the sample data (20 clinical + these 4 reference/directory types).
 --
 -- Run this PUT from SnowSQL or the Snowflake VS Code extension with local
 -- filesystem access. PUT does not resolve relative paths and cannot read files

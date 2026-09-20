@@ -442,3 +442,83 @@ SELECT
 FROM RAW.BUNDLE_RAW b,
      LATERAL FLATTEN(input => b.BUNDLE_JSON:entry) e
 WHERE e.value:resource:resourceType::VARCHAR = 'ImagingStudy';
+
+-- Reference/directory resources
+
+-- Organization
+INSERT INTO FOUNDATION.ORGANIZATION
+SELECT
+    e.value:resource:id::VARCHAR,
+    b.TRACKING_ID,
+    b.SOURCE_FILE_NAME,
+    e.index,
+    CURRENT_TIMESTAMP(),
+    e.value:resource:active,
+    e.value:resource:address,
+    e.value:resource:extension,
+    e.value:resource:identifier,
+    e.value:resource:name,
+    e.value:resource:telecom,
+    e.value:resource:type
+FROM RAW.BUNDLE_RAW b,
+     LATERAL FLATTEN(input => b.BUNDLE_JSON:entry) e
+WHERE e.value:resource:resourceType::VARCHAR = 'Organization';
+
+-- Location
+INSERT INTO FOUNDATION.LOCATION
+SELECT
+    e.value:resource:id::VARCHAR,
+    b.TRACKING_ID,
+    b.SOURCE_FILE_NAME,
+    e.index,
+    CURRENT_TIMESTAMP(),
+    e.value:resource:address,
+    e.value:resource:description,
+    e.value:resource:identifier,
+    e.value:resource:managingOrganization,
+    e.value:resource:mode,
+    e.value:resource:name,
+    e.value:resource:physicalType,
+    e.value:resource:position,
+    e.value:resource:status,
+    e.value:resource:telecom
+FROM RAW.BUNDLE_RAW b,
+     LATERAL FLATTEN(input => b.BUNDLE_JSON:entry) e
+WHERE e.value:resource:resourceType::VARCHAR = 'Location';
+
+-- Practitioner
+INSERT INTO FOUNDATION.PRACTITIONER
+SELECT
+    e.value:resource:id::VARCHAR,
+    b.TRACKING_ID,
+    b.SOURCE_FILE_NAME,
+    e.index,
+    CURRENT_TIMESTAMP(),
+    e.value:resource:active,
+    e.value:resource:address,
+    e.value:resource:extension,
+    e.value:resource:gender,
+    e.value:resource:identifier,
+    e.value:resource:name,
+    e.value:resource:telecom
+FROM RAW.BUNDLE_RAW b,
+     LATERAL FLATTEN(input => b.BUNDLE_JSON:entry) e
+WHERE e.value:resource:resourceType::VARCHAR = 'Practitioner';
+
+-- PractitionerRole
+INSERT INTO FOUNDATION.PRACTITIONER_ROLE
+SELECT
+    e.value:resource:id::VARCHAR,
+    b.TRACKING_ID,
+    b.SOURCE_FILE_NAME,
+    e.index,
+    CURRENT_TIMESTAMP(),
+    e.value:resource:code,
+    e.value:resource:location,
+    e.value:resource:organization,
+    e.value:resource:practitioner,
+    e.value:resource:specialty,
+    e.value:resource:telecom
+FROM RAW.BUNDLE_RAW b,
+     LATERAL FLATTEN(input => b.BUNDLE_JSON:entry) e
+WHERE e.value:resource:resourceType::VARCHAR = 'PractitionerRole';

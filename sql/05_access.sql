@@ -79,6 +79,18 @@ SELECT * FROM FOUNDATION.DEVICE;
 CREATE OR REPLACE VIEW ACCESS.IMAGING_STUDY_VIEW AS
 SELECT * FROM FOUNDATION.IMAGING_STUDY;
 
+CREATE OR REPLACE VIEW ACCESS.ORGANIZATION_VIEW AS
+SELECT * FROM FOUNDATION.ORGANIZATION;
+
+CREATE OR REPLACE VIEW ACCESS.LOCATION_VIEW AS
+SELECT * FROM FOUNDATION.LOCATION;
+
+CREATE OR REPLACE VIEW ACCESS.PRACTITIONER_VIEW AS
+SELECT * FROM FOUNDATION.PRACTITIONER;
+
+CREATE OR REPLACE VIEW ACCESS.PRACTITIONER_ROLE_VIEW AS
+SELECT * FROM FOUNDATION.PRACTITIONER_ROLE;
+
 -- ---------------------------------------------------------------------------
 -- Section 2: clubbed (joined) views
 -- ---------------------------------------------------------------------------
@@ -471,3 +483,88 @@ SELECT
     (SELECT COUNT(*) FROM FOUNDATION.MEDICATION_ADMINISTRATION med WHERE med.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS MEDICATION_ADMINISTRATION_COUNT,
     (SELECT COUNT(*) FROM FOUNDATION.EXPLANATION_OF_BENEFIT exp WHERE exp.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID) AS EXPLANATION_OF_BENEFIT_COUNT
 FROM FOUNDATION.PATIENT p;
+
+-- ---------------------------------------------------------------------------
+-- Section 7: directory/reference resource views (Organization, Location,
+-- Practitioner, PractitionerRole).
+--
+-- These come from Synthea's separate hospital/practitioner bundles, which
+-- reference each other by IDENTIFIER (system+value), not by a plain
+-- "Type/<id>" reference like the patient bundles use:
+--   - PractitionerRole.organization / .practitioner / .location[] hold
+--     {identifier: {system, value}, display} objects directly.
+--   - Encounter.serviceProvider / .location[].location / .participant[].individual
+--     hold search-style references instead: "Organization?identifier=<system>|<value>".
+--     SPLIT_PART(..., '|', -1) pulls the identifier value back out.
+-- ---------------------------------------------------------------------------
+
+-- Location + its managing Organization.
+CREATE OR REPLACE VIEW ACCESS.LOCATION_ORGANIZATION_VIEW AS
+SELECT
+    loc.RESOURCE_ID     AS LOCATION_ID,
+    loc.FHIR_NAME         AS LOCATION_NAME,
+    loc.FHIR_ADDRESS       AS LOCATION_ADDRESS,
+    loc.FHIR_STATUS        AS LOCATION_STATUS,
+    org.RESOURCE_ID         AS ORGANIZATION_ID,
+    org.FHIR_NAME             AS ORGANIZATION_NAME,
+    org.FHIR_TYPE              AS ORGANIZATION_TYPE,
+    org.FHIR_ACTIVE            AS ORGANIZATION_ACTIVE
+FROM FOUNDATION.LOCATION loc
+JOIN FOUNDATION.ORGANIZATION org
+    ON loc.FHIR_MANAGINGORGANIZATION:identifier:value::VARCHAR = org.FHIR_IDENTIFIER[0]:value::VARCHAR;
+
+-- PractitionerRole + the Practitioner and Organization it links (one row per
+-- role -- takes the role's first listed location when it covers more than one).
+CREATE OR REPLACE VIEW ACCESS.PRACTITIONER_ROLE_DETAIL_VIEW AS
+SELECT
+    role.RESOURCE_ID        AS PRACTITIONER_ROLE_ID,
+    role.FHIR_CODE            AS ROLE_CODE,
+    role.FHIR_SPECIALTY        AS ROLE_SPECIALTY,
+    prac.RESOURCE_ID             AS PRACTITIONER_ID,
+    prac.FHIR_NAME                 AS PRACTITIONER_NAME,
+    prac.FHIR_GENDER               AS PRACTITIONER_GENDER,
+    org.RESOURCE_ID                  AS ORGANIZATION_ID,
+    org.FHIR_NAME                      AS ORGANIZATION_NAME,
+    role.FHIR_LOCATION[0]:identifier:value::VARCHAR AS PRIMARY_LOCATION_ID
+FROM FOUNDATION.PRACTITIONER_ROLE role
+JOIN FOUNDATION.PRACTITIONER prac
+    ON role.FHIR_PRACTITIONER:identifier:value::VARCHAR = prac.FHIR_IDENTIFIER[0]:value::VARCHAR
+JOIN FOUNDATION.ORGANIZATION org
+    ON role.FHIR_ORGANIZATION:identifier:value::VARCHAR = org.FHIR_IDENTIFIER[0]:value::VARCHAR;
+
+-- Encounter + the Organization that served it.
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_ORGANIZATION_VIEW AS
+SELECT
+    e.RESOURCE_ID     AS ENCOUNTER_ID,
+    e.FHIR_PERIOD        AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE           AS ENCOUNTER_TYPE,
+    org.RESOURCE_ID          AS ORGANIZATION_ID,
+    org.FHIR_NAME              AS ORGANIZATION_NAME
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.ORGANIZATION org
+    ON SPLIT_PART(e.FHIR_SERVICEPROVIDER:reference::VARCHAR, '|', -1) = org.FHIR_IDENTIFIER[0]:value::VARCHAR;
+
+-- Encounter + the Location it happened at (takes the first listed location).
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_LOCATION_VIEW AS
+SELECT
+    e.RESOURCE_ID     AS ENCOUNTER_ID,
+    e.FHIR_PERIOD        AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE           AS ENCOUNTER_TYPE,
+    loc.RESOURCE_ID          AS LOCATION_ID,
+    loc.FHIR_NAME               AS LOCATION_NAME,
+    loc.FHIR_ADDRESS            AS LOCATION_ADDRESS
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.LOCATION loc
+    ON SPLIT_PART(e.FHIR_LOCATION[0]:location:reference::VARCHAR, '|', -1) = loc.FHIR_IDENTIFIER[0]:value::VARCHAR;
+
+-- Encounter + the primary performing Practitioner (takes the first listed participant).
+CREATE OR REPLACE VIEW ACCESS.ENCOUNTER_PRACTITIONER_VIEW AS
+SELECT
+    e.RESOURCE_ID     AS ENCOUNTER_ID,
+    e.FHIR_PERIOD        AS ENCOUNTER_PERIOD,
+    e.FHIR_TYPE           AS ENCOUNTER_TYPE,
+    prac.RESOURCE_ID         AS PRACTITIONER_ID,
+    prac.FHIR_NAME              AS PRACTITIONER_NAME
+FROM FOUNDATION.ENCOUNTER e
+JOIN FOUNDATION.PRACTITIONER prac
+    ON SPLIT_PART(e.FHIR_PARTICIPANT[0]:individual:reference::VARCHAR, '|', -1) = prac.FHIR_IDENTIFIER[0]:value::VARCHAR;

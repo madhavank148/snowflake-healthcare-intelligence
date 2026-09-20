@@ -379,3 +379,77 @@ CREATE TABLE IF NOT EXISTS FOUNDATION.IMAGING_STUDY (
     FHIR_LOCATION             VARIANT,
     FHIR_SERIES               VARIANT
 );
+
+-- ============================================================================
+-- Reference/directory resources (Organization, Location, Practitioner,
+-- PractitionerRole) -- these are referenced BY the clinical resources above
+-- (e.g. Encounter.serviceProvider, PractitionerRole.organization) but aren't
+-- clinical facts about a patient themselves. Same semi-flat pattern.
+-- ============================================================================
+
+
+-- Organization
+CREATE TABLE IF NOT EXISTS FOUNDATION.ORGANIZATION (
+    RESOURCE_ID          VARCHAR,                                -- resource's own FHIR id (business key)
+    BUNDLE_TRACK_ID_REF  VARCHAR,                                -- FK -> RAW.BUNDLE_RAW.TRACKING_ID
+    SOURCE_FILE_NAME     VARCHAR,
+    ENTRY_INDEX          NUMBER,                                 -- position of this resource in the bundle's entry[] array
+    FOUNDATION_LOAD_TS   TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    FHIR_ACTIVE               VARIANT,
+    FHIR_ADDRESS              VARIANT,
+    FHIR_EXTENSION            VARIANT,
+    FHIR_IDENTIFIER           VARIANT,
+    FHIR_NAME                 VARIANT,
+    FHIR_TELECOM              VARIANT,
+    FHIR_TYPE                 VARIANT
+);
+
+-- Location
+CREATE TABLE IF NOT EXISTS FOUNDATION.LOCATION (
+    RESOURCE_ID          VARCHAR,                                -- resource's own FHIR id (business key)
+    BUNDLE_TRACK_ID_REF  VARCHAR,                                -- FK -> RAW.BUNDLE_RAW.TRACKING_ID
+    SOURCE_FILE_NAME     VARCHAR,
+    ENTRY_INDEX          NUMBER,                                 -- position of this resource in the bundle's entry[] array
+    FOUNDATION_LOAD_TS   TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    FHIR_ADDRESS              VARIANT,
+    FHIR_DESCRIPTION          VARIANT,
+    FHIR_IDENTIFIER           VARIANT,
+    FHIR_MANAGINGORGANIZATION VARIANT,
+    FHIR_MODE                 VARIANT,
+    FHIR_NAME                 VARIANT,
+    FHIR_PHYSICALTYPE         VARIANT,
+    FHIR_POSITION             VARIANT,
+    FHIR_STATUS               VARIANT,
+    FHIR_TELECOM              VARIANT
+);
+
+-- Practitioner
+CREATE TABLE IF NOT EXISTS FOUNDATION.PRACTITIONER (
+    RESOURCE_ID          VARCHAR,                                -- resource's own FHIR id (business key)
+    BUNDLE_TRACK_ID_REF  VARCHAR,                                -- FK -> RAW.BUNDLE_RAW.TRACKING_ID
+    SOURCE_FILE_NAME     VARCHAR,
+    ENTRY_INDEX          NUMBER,                                 -- position of this resource in the bundle's entry[] array
+    FOUNDATION_LOAD_TS   TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    FHIR_ACTIVE               VARIANT,
+    FHIR_ADDRESS              VARIANT,
+    FHIR_EXTENSION            VARIANT,
+    FHIR_GENDER               VARIANT,
+    FHIR_IDENTIFIER           VARIANT,
+    FHIR_NAME                 VARIANT,
+    FHIR_TELECOM              VARIANT
+);
+
+-- PractitionerRole
+CREATE TABLE IF NOT EXISTS FOUNDATION.PRACTITIONER_ROLE (
+    RESOURCE_ID          VARCHAR,                                -- resource's own FHIR id (business key)
+    BUNDLE_TRACK_ID_REF  VARCHAR,                                -- FK -> RAW.BUNDLE_RAW.TRACKING_ID
+    SOURCE_FILE_NAME     VARCHAR,
+    ENTRY_INDEX          NUMBER,                                 -- position of this resource in the bundle's entry[] array
+    FOUNDATION_LOAD_TS   TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    FHIR_CODE                 VARIANT,
+    FHIR_LOCATION             VARIANT,
+    FHIR_ORGANIZATION         VARIANT,
+    FHIR_PRACTITIONER         VARIANT,
+    FHIR_SPECIALTY            VARIANT,
+    FHIR_TELECOM              VARIANT
+);
