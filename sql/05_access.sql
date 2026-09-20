@@ -1,0 +1,9 @@
+-- ============================================================================
+-- 05_access.sql
+-- ACCESS schema is created in 01_setup.sql.
+--
+-- Out of scope for this setup pass: this is where the RLS-governed,
+-- denormalized consumption views per data product (e.g. VW_VISITS,
+-- VW_DIAGNOSES) will live once FOUNDATION has real data loaded and the
+-- semantic model layer is being built. Placeholder only.
+-- ============================================================================

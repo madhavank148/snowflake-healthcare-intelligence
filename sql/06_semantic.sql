@@ -1,0 +1,9 @@
+-- ============================================================================
+-- 06_semantic.sql
+-- SEMANTIC schema is created in 01_setup.sql.
+--
+-- Out of scope for this setup pass: this is where the Cortex Analyst
+-- semantic model YAML stage (visits_semantic.yaml, diagnoses_semantic.yaml,
+-- etc.) and any Cortex Search services will be set up once ACCESS views
+-- exist to model. Placeholder only.
+-- ============================================================================
