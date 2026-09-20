@@ -2,7 +2,7 @@
 -- 03_reconciliation_agent.sql
 -- Reconciliation Agent: monitors pipeline health by querying the
 -- RECONCILIATION.LOAD_SUMMARY data through VW_RECONCILIATION /
--- SV_RECONCILIATION (sql/semanticViews/02_reconciliation_semantic_view.sql).
+-- SV_RECONCILIATION (sql/4-semanticViews/02_reconciliation_semantic_view.sql).
 --
 -- This agent is separate from the Intelligence Agent because it serves
 -- a different audience (data engineers / pipeline operators) and a

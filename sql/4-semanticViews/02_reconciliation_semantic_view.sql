@@ -1,7 +1,7 @@
 -- ============================================================================
 -- 02_reconciliation_semantic_view.sql
 -- Semantic View for Reconciliation: models VW_RECONCILIATION for Cortex
--- Analyst, so the Reconciliation Agent (sql/agents/03_reconciliation_agent.sql)
+-- Analyst, so the Reconciliation Agent (sql/5-agents/03_reconciliation_agent.sql)
 -- can answer pipeline-health questions in natural language.
 --
 -- Split out of the original 07c_reconciliation_agent.sql, which combined
