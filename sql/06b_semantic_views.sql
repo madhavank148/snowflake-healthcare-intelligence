@@ -83,6 +83,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_VISITS
       COMMENT = 'Maximum length of stay in minutes for a single encounter'
   )
 
+  COMMENT = 'Healthcare visit/encounter analytics: visit counts, length of stay, facility and practitioner breakdowns'
+
   AI_SQL_GENERATION 'When filtering by encounter class, use the code values: AMB for ambulatory, EMER for emergency, IMP for inpatient, WELLNESS for wellness visits. Date filters should default to the ENCOUNTER_START column. When asked about readmissions, look for multiple encounters for the same patient within 30 days.'
 
   AI_VERIFIED_QUERIES (
@@ -98,9 +100,7 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_VISITS
       QUESTION 'What is the average length of stay by encounter type?'
       SQL 'SELECT ENCOUNTER_TYPE, ROUND(AVG(LENGTH_OF_STAY_MINUTES), 2) AS AVG_LOS_MINUTES FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_VISITS GROUP BY ENCOUNTER_TYPE ORDER BY AVG_LOS_MINUTES DESC'
     )
-  )
-
-  COMMENT = 'Healthcare visit/encounter analytics: visit counts, length of stay, facility and practitioner breakdowns';
+  );
 
 
 -- ---------------------------------------------------------------------------
@@ -159,6 +159,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_DIAGNOSES
       COMMENT = 'Number of distinct ICD/SNOMED codes'
   )
 
+  COMMENT = 'Healthcare diagnosis/condition analytics: ICD code distributions, active conditions, patient diagnosis counts'
+
   AI_SQL_GENERATION 'When users ask about top diagnoses, order by diagnosis_count descending. If asked about a specific ICD code, filter on ICD_CODE. For active conditions, filter CLINICAL_STATUS = active.'
 
   AI_VERIFIED_QUERIES (
@@ -170,9 +172,7 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_DIAGNOSES
       QUESTION 'How many active conditions does each patient have?'
       SQL 'SELECT PATIENT_NAME, COUNT(*) AS ACTIVE_CONDITIONS FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_DIAGNOSES WHERE CLINICAL_STATUS = ''active'' GROUP BY PATIENT_NAME ORDER BY ACTIVE_CONDITIONS DESC'
     )
-  )
-
-  COMMENT = 'Healthcare diagnosis/condition analytics: ICD code distributions, active conditions, patient diagnosis counts';
+  );
 
 
 -- ---------------------------------------------------------------------------
@@ -231,6 +231,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_MEDICATIONS
       COMMENT = 'Number of distinct medications prescribed'
   )
 
+  COMMENT = 'Medication/prescription analytics: drug frequencies, patient polypharmacy, prescription trends'
+
   AI_SQL_GENERATION 'When asked about most prescribed medications, group by MEDICATION_NAME and order by prescription_count descending. For active prescriptions, filter MEDICATION_STATUS = active.'
 
   AI_VERIFIED_QUERIES (
@@ -238,9 +240,7 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_MEDICATIONS
       QUESTION 'What are the most commonly prescribed medications?'
       SQL 'SELECT MEDICATION_NAME, COUNT(*) AS RX_COUNT FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_MEDICATIONS GROUP BY MEDICATION_NAME ORDER BY RX_COUNT DESC LIMIT 10'
     )
-  )
-
-  COMMENT = 'Medication/prescription analytics: drug frequencies, patient polypharmacy, prescription trends';
+  );
 
 
 -- ---------------------------------------------------------------------------
@@ -302,6 +302,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_CLAIMS
       COMMENT = 'Number of distinct patients with claims'
   )
 
+  COMMENT = 'Healthcare claims/financial analytics: cost analysis, claim distributions, patient spending'
+
   AI_SQL_GENERATION 'Financial amounts are in TOTAL_CLAIM_AMOUNT. When filtering by claim type, use lowercase values like institutional or professional. Date-based questions should default to BILLABLE_START.'
 
   AI_VERIFIED_QUERIES (
@@ -313,9 +315,7 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_CLAIMS
       QUESTION 'Which patients have the highest total claims?'
       SQL 'SELECT PATIENT_NAME, SUM(TOTAL_CLAIM_AMOUNT) AS TOTAL_BILLED, COUNT(*) AS CLAIM_COUNT FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_CLAIMS GROUP BY PATIENT_NAME ORDER BY TOTAL_BILLED DESC LIMIT 10'
     )
-  )
-
-  COMMENT = 'Healthcare claims/financial analytics: cost analysis, claim distributions, patient spending';
+  );
 
 
 -- ---------------------------------------------------------------------------
@@ -377,6 +377,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_OBSERVATIONS
       COMMENT = 'Number of distinct patients with observations'
   )
 
+  COMMENT = 'Clinical observation analytics: lab results, vital signs, test frequencies and value distributions'
+
   AI_SQL_GENERATION 'When asked about specific lab values (e.g., blood pressure, glucose, BMI), filter on OBSERVATION_DISPLAY using ILIKE. For vital signs, filter OBSERVATION_CATEGORY = vital-signs. For lab results, filter OBSERVATION_CATEGORY = laboratory.'
 
   AI_VERIFIED_QUERIES (
@@ -384,9 +386,7 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_OBSERVATIONS
       QUESTION 'What are the most common lab tests and vitals recorded?'
       SQL 'SELECT OBSERVATION_DISPLAY, OBSERVATION_CATEGORY, COUNT(*) AS OBS_COUNT FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_OBSERVATIONS GROUP BY OBSERVATION_DISPLAY, OBSERVATION_CATEGORY ORDER BY OBS_COUNT DESC LIMIT 15'
     )
-  )
-
-  COMMENT = 'Clinical observation analytics: lab results, vital signs, test frequencies and value distributions';
+  );
 
 
 -- ---------------------------------------------------------------------------
@@ -440,6 +440,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_PROCEDURES
       COMMENT = 'Number of distinct procedure types'
   )
 
+  COMMENT = 'Clinical procedure analytics: procedure volumes, patient procedure counts, procedure type distributions'
+
   AI_SQL_GENERATION 'When asked about common procedures, group by PROCEDURE_DISPLAY and order by procedure_count descending. For completed procedures, filter PROCEDURE_STATUS = completed.'
 
   AI_VERIFIED_QUERIES (
@@ -447,6 +449,4 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_PROCEDURES
       QUESTION 'What are the most commonly performed procedures?'
       SQL 'SELECT PROCEDURE_DISPLAY, PROCEDURE_CODE, COUNT(*) AS PROCEDURE_COUNT FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_PROCEDURES GROUP BY PROCEDURE_DISPLAY, PROCEDURE_CODE ORDER BY PROCEDURE_COUNT DESC LIMIT 10'
     )
-  )
-
-  COMMENT = 'Clinical procedure analytics: procedure volumes, patient procedure counts, procedure type distributions';
+  );
