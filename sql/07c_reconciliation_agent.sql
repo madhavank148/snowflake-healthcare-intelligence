@@ -31,10 +31,10 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_RECONCILIATION
     recon.resource_type      AS RESOURCE_TYPE
       WITH SYNONYMS = ('FHIR resource', 'resource', 'table')
       COMMENT = 'FHIR resource type (Patient, Encounter, Condition, etc.)',
-    recon.status             AS LOAD_STATUS
+    recon.load_status        AS STATUS
       WITH SYNONYMS = ('status', 'reconciliation status')
       COMMENT = 'Reconciliation status: MATCHED or MISMATCH',
-    recon.load_ts            AS LOAD_TIMESTAMP
+    recon.load_timestamp     AS LOAD_TS
       WITH SYNONYMS = ('load date', 'load time')
       COMMENT = 'Timestamp when the load was recorded'
   )
@@ -57,6 +57,8 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_RECONCILIATION
       COMMENT = 'Number of loads where RAW count did not match FOUNDATION count'
   )
 
+  COMMENT = 'Pipeline reconciliation analytics: RAW vs FOUNDATION load counts, mismatch detection, load health monitoring'
+
   AI_SQL_GENERATION 'When asked about pipeline health, check for MISMATCH status or non-zero MISMATCH_COUNT. Resource types map to FOUNDATION table names (Patient, Encounter, Condition, etc.).'
 
   AI_VERIFIED_QUERIES (
@@ -68,9 +70,7 @@ CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_RECONCILIATION
       QUESTION 'Show me recent load activity'
       SQL 'SELECT SOURCE_FILE_NAME, RESOURCE_TYPE, RAW_ENTRY_COUNT, FOUNDATION_LOADED_COUNT, MISMATCH_COUNT, STATUS, LOAD_TS FROM HEALTHCARE_INTELLIGENCE_DB.ACCESS.VW_RECONCILIATION ORDER BY LOAD_TS DESC LIMIT 20'
     )
-  )
-
-  COMMENT = 'Pipeline reconciliation analytics: RAW vs FOUNDATION load counts, mismatch detection, load health monitoring';
+  );
 
 
 -- ---------------------------------------------------------------------------
