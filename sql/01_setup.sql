@@ -20,5 +20,8 @@ CREATE SCHEMA IF NOT EXISTS ACCESS;
 -- Pipeline health: bundle vs. resource load-count tracking.
 CREATE SCHEMA IF NOT EXISTS RECONCILIATION;
 
--- Cortex Analyst semantic model layer (YAML stage, future).
+-- Cortex Analyst semantic views, Cortex Agents, and MCP servers.
 CREATE SCHEMA IF NOT EXISTS SEMANTIC;
+
+--     Required so agents can access models in other regions.
+ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'ANY_REGION';
