@@ -1,5 +1,5 @@
 -- ============================================================================
--- 02_raw.sql
+-- 01_raw_bundle_raw.sql
 -- RAW schema: landing table for whole FHIR Bundles + the stage/file format
 -- used to load the sample JSON files into it.
 -- ============================================================================

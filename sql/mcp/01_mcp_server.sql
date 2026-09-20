@@ -1,5 +1,5 @@
 -- ============================================================================
--- 08_mcp_server.sql
+-- 01_mcp_server.sql
 -- MCP Server: exposes the Healthcare Intelligence Agent to external
 -- consumers (Claude Desktop, custom apps, Slack bots, etc.) via the
 -- Model Context Protocol standard.

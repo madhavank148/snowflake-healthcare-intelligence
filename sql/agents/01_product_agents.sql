@@ -1,5 +1,5 @@
 -- ============================================================================
--- 07a_product_agents.sql
+-- 01_product_agents.sql
 -- Product Agents: one Cortex Agent per healthcare domain.
 -- Each agent has a single cortex_analyst_text_to_sql tool backed by its
 -- domain-specific semantic view, plus a data_to_chart tool for visuals.

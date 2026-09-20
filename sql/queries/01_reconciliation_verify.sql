@@ -1,5 +1,5 @@
 -- ============================================================================
--- 40_reconciliation_verify.sql
+-- 01_reconciliation_verify.sql
 -- Read-only verification queries across every layer. Run after a load to
 -- eyeball that data actually landed, and reused as-is by the Reconciliation
 -- Agent (Poc.html) as its query surface for pipeline-health questions

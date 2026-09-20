@@ -1,5 +1,5 @@
 -- ============================================================================
--- 07b_intelligence_agent.sql
+-- 02_intelligence_agent.sql
 -- Intelligence Orchestrator Agent: the single top-level agent that owns
 -- ALL six domain semantic views as Cortex Analyst tools.
 --

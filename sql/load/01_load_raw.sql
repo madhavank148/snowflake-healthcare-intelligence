@@ -1,10 +1,10 @@
 -- ============================================================================
--- 10_load_raw.sql
+-- 01_load_raw.sql
 -- Loads the local sample FHIR Bundle JSON files into RAW.BUNDLE_RAW.
 --
--- All 111 files under sample_synthetic_data_fhir_r4/ are FHIR Bundles
--- (resourceType = "Bundle"): 109 per-patient clinical bundles plus two
--- reference bundles (hospitalInformation... -> Organization/Location,
+-- All 111 files under resources/sample_synthetic_data_fhir_r4/ are FHIR
+-- Bundles (resourceType = "Bundle"): 109 per-patient clinical bundles plus
+-- two reference bundles (hospitalInformation... -> Organization/Location,
 -- practitionerInformation... -> Practitioner/PractitionerRole). All of them
 -- load the same way here; FOUNDATION has tables for all 24 resource types
 -- found in the sample data (20 clinical + these 4 reference/directory types).
@@ -18,7 +18,7 @@ USE DATABASE HEALTHCARE_INTELLIGENCE_DB;
 USE SCHEMA RAW;
 
 -- Upload local files to the internal stage. The file:// URI must be absolute.
-PUT 'file:///Users/madhavan/vs_code_workspace/snowflake-healthcare-intelligence/sample_synthetic_data_fhir_r4/*.json'
+PUT 'file:///Users/madhavan/vs_code_workspace/snowflake-healthcare-intelligence/resources/sample_synthetic_data_fhir_r4/*.json'
     @RAW.FHIR_STAGE
     AUTO_COMPRESS=TRUE
     OVERWRITE=TRUE;

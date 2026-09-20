@@ -1,5 +1,5 @@
 -- ============================================================================
--- 06a_access_flattened.sql
+-- 02_access_flattened_views.sql
 -- Flattened ACCESS views: extract scalar values from VARIANT/JSON columns
 -- so that Semantic Views have clean, typed columns to define dimensions
 -- and metrics against.

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 04_reconciliation.sql
+-- 03_reconciliation_table.sql
 -- RECONCILIATION schema: tracks, per loaded bundle and resource type, how many
 -- entries existed in RAW vs. how many rows actually landed in FOUNDATION.
 -- Skeleton only for now -- populated by a future reconciliation step/agent.

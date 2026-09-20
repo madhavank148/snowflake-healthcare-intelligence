@@ -1,5 +1,5 @@
 -- ============================================================================
--- 03_foundation.sql
+-- 02_foundation_tables.sql
 -- FOUNDATION schema: one table per FHIR resource type, semi-flat.
 -- Every root-level JSON field of the resource becomes its own FHIR_<FIELD>
 -- VARIANT column (holding that field's JSON as-is, not flattened further).

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20_load_foundation.sql
+-- 02_load_foundation.sql
 -- Splits each loaded RAW bundle's entry[] array by resourceType and inserts
 -- one row per resource into the matching FOUNDATION table, mapping each
 -- root-level JSON field to its FHIR_<FIELD> column.

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 05_access.sql
+-- 01_access_views.sql
 -- ACCESS schema: consumption views on top of FOUNDATION.
 --
 -- Section 1: plain 1:1 views, one per resource type -- the simplest possible

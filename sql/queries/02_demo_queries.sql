@@ -1,5 +1,5 @@
 -- ============================================================================
--- 09_demo_queries.sql
+-- 02_demo_queries.sql
 -- Verification & Demo Queries
 --
 -- This file contains queries to:

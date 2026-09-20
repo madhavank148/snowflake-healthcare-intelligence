@@ -1,5 +1,5 @@
 -- ============================================================================
--- 30_load_reconciliation.sql
+-- 03_load_reconciliation.sql
 -- Refreshes RECONCILIATION.LOAD_SUMMARY: for every loaded bundle, compares
 -- how many entries of each resourceType existed in RAW.BUNDLE_RAW against how
 -- many rows actually landed in the matching FOUNDATION table.

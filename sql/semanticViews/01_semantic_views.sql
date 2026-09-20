@@ -1,5 +1,5 @@
 -- ============================================================================
--- 06b_semantic_views.sql
+-- 01_semantic_views.sql
 -- Semantic Views: one per healthcare domain.
 -- Each semantic view points at the flattened ACCESS.VW_* views and defines
 -- typed dimensions, metrics, synonyms, and verified queries that Cortex

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 01_setup.sql
+-- 01_database_and_schemas.sql
 -- Database + schema setup for the Healthcare Intelligence data platform.
 -- Layers: RAW -> FOUNDATION -> ACCESS / RECONCILIATION / SEMANTIC
 -- ============================================================================
