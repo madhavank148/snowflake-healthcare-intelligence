@@ -10,16 +10,19 @@
 -- resource types, so Organization/Location/Practitioner/PractitionerRole
 -- rows stay recoverable in RAW.BUNDLE_JSON without a FOUNDATION split for now.
 --
--- Run from the sql/ directory (or adjust the file:// path) using SnowSQL or
--- the Snowflake VS Code extension's SQL worksheet -- PUT only works from a
--- client with local filesystem access, not from Snowsight in the browser.
+-- Run this PUT from SnowSQL or the Snowflake VS Code extension with local
+-- filesystem access. PUT does not resolve relative paths and cannot read files
+-- from a Snowsight browser worksheet.
 -- ============================================================================
 
 USE DATABASE HEALTHCARE_INTELLIGENCE_DB;
 USE SCHEMA RAW;
 
--- Upload local files to the internal stage.
-PUT 'file://../sample_synthetic_data_fhir_r4/*.json' @RAW.FHIR_STAGE AUTO_COMPRESS=TRUE OVERWRITE=TRUE;
+-- Upload local files to the internal stage. The file:// URI must be absolute.
+PUT 'file:///Users/madhavan/vs_code_workspace/snowflake-healthcare-intelligence/sample_synthetic_data_fhir_r4/*.json'
+    @RAW.FHIR_STAGE
+    AUTO_COMPRESS=TRUE
+    OVERWRITE=TRUE;
 
 -- Each staged file is a single JSON object (one Bundle) -> load as one VARIANT row per file.
 COPY INTO RAW.BUNDLE_RAW (SOURCE_FILE_NAME, TRACKING_ID, BUNDLE_JSON)
