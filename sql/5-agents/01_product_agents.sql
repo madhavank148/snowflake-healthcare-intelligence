@@ -55,6 +55,7 @@ CREATE OR REPLACE AGENT SEMANTIC.VISITS_AGENT
   tool_resources:
     Visits_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_VISITS"
+      warehouse: "COMPUTE_WH"
   $$;
 
 
@@ -96,6 +97,7 @@ CREATE OR REPLACE AGENT SEMANTIC.DIAGNOSES_AGENT
   tool_resources:
     Diagnoses_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_DIAGNOSES"
+      warehouse: "COMPUTE_WH"
   $$;
 
 
@@ -137,6 +139,7 @@ CREATE OR REPLACE AGENT SEMANTIC.MEDICATIONS_AGENT
   tool_resources:
     Medications_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_MEDICATIONS"
+      warehouse: "COMPUTE_WH"
   $$;
 
 
@@ -178,6 +181,7 @@ CREATE OR REPLACE AGENT SEMANTIC.CLAIMS_AGENT
   tool_resources:
     Claims_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_CLAIMS"
+      warehouse: "COMPUTE_WH"
   $$;
 
 
@@ -220,6 +224,7 @@ CREATE OR REPLACE AGENT SEMANTIC.OBSERVATIONS_AGENT
   tool_resources:
     Observations_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_OBSERVATIONS"
+      warehouse: "COMPUTE_WH"
   $$;
 
 
@@ -261,4 +266,5 @@ CREATE OR REPLACE AGENT SEMANTIC.PROCEDURES_AGENT
   tool_resources:
     Procedures_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_PROCEDURES"
+      warehouse: "COMPUTE_WH"
   $$;

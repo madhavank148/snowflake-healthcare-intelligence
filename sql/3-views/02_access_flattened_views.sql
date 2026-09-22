@@ -6,6 +6,16 @@
 --
 -- These views sit alongside the existing ACCESS.*_VIEW objects (05_access.sql)
 -- and are the sole source for the Semantic Views in 06b_semantic_views.sql.
+--
+-- IMPORTANT: in this Synthea-generated sample data, intra-bundle references
+-- (Patient/Encounter/etc.) are ALWAYS "urn:uuid:<resource id>" -- never
+-- "Patient/<id>". Joins below strip the "urn:uuid:" prefix rather than
+-- splitting on "/". Cross-file references (Encounter.serviceProvider/
+-- location -> Organization/Location in hospitalInformation*.json, and
+-- CareTeam/Encounter.participant -> Practitioner in
+-- practitionerInformation*.json) instead use
+-- "<ResourceType>?identifier=<system>|<value>" and are matched against the
+-- target resource's FHIR_IDENTIFIER value, which is correct as-is.
 -- ============================================================================
 
 USE DATABASE HEALTHCARE_INTELLIGENCE_DB;
@@ -55,7 +65,7 @@ SELECT
 
 FROM FOUNDATION.ENCOUNTER e
 JOIN FOUNDATION.PATIENT p
-    ON e.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID
+    ON SPLIT_PART(e.FHIR_SUBJECT:reference::VARCHAR, ':', -1) = p.RESOURCE_ID
 LEFT JOIN FOUNDATION.ORGANIZATION org
     ON SPLIT_PART(e.FHIR_SERVICEPROVIDER:reference::VARCHAR, '|', -1)
        = org.FHIR_IDENTIFIER[0]:value::VARCHAR
@@ -92,11 +102,11 @@ SELECT
     c.FHIR_RECORDEDDATE::DATE                                 AS RECORDED_DATE,
 
     -- Linked encounter
-    SPLIT_PART(c.FHIR_ENCOUNTER:reference::VARCHAR, '/', -1)  AS ENCOUNTER_ID
+    SPLIT_PART(c.FHIR_ENCOUNTER:reference::VARCHAR, ':', -1)  AS ENCOUNTER_ID
 
 FROM FOUNDATION.PATIENT p
 JOIN FOUNDATION.CONDITION c
-    ON c.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+    ON SPLIT_PART(c.FHIR_SUBJECT:reference::VARCHAR, ':', -1) = p.RESOURCE_ID;
 
 
 -- ---------------------------------------------------------------------------
@@ -121,11 +131,11 @@ SELECT
     m.FHIR_DOSAGEINSTRUCTION[0]:text::VARCHAR                 AS DOSAGE_INSTRUCTION,
 
     -- Linked encounter
-    SPLIT_PART(m.FHIR_ENCOUNTER:reference::VARCHAR, '/', -1)  AS ENCOUNTER_ID
+    SPLIT_PART(m.FHIR_ENCOUNTER:reference::VARCHAR, ':', -1)  AS ENCOUNTER_ID
 
 FROM FOUNDATION.PATIENT p
 JOIN FOUNDATION.MEDICATION_REQUEST m
-    ON m.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+    ON SPLIT_PART(m.FHIR_SUBJECT:reference::VARCHAR, ':', -1) = p.RESOURCE_ID;
 
 
 -- ---------------------------------------------------------------------------
@@ -151,12 +161,12 @@ SELECT
     cl.FHIR_CREATED::DATE                                     AS CLAIM_CREATED_DATE,
 
     -- Linked encounter (via first item's encounter reference if available)
-    SPLIT_PART(cl.FHIR_ITEM[0]:encounter[0]:reference::VARCHAR, '/', -1)
+    SPLIT_PART(cl.FHIR_ITEM[0]:encounter[0]:reference::VARCHAR, ':', -1)
                                                                AS ENCOUNTER_ID
 
 FROM FOUNDATION.PATIENT p
 JOIN FOUNDATION.CLAIM cl
-    ON cl.FHIR_PATIENT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+    ON SPLIT_PART(cl.FHIR_PATIENT:reference::VARCHAR, ':', -1) = p.RESOURCE_ID;
 
 
 -- ---------------------------------------------------------------------------
@@ -183,11 +193,11 @@ SELECT
     o.FHIR_VALUESTRING::VARCHAR                               AS VALUE_STRING,
 
     -- Linked encounter
-    SPLIT_PART(o.FHIR_ENCOUNTER:reference::VARCHAR, '/', -1)  AS ENCOUNTER_ID
+    SPLIT_PART(o.FHIR_ENCOUNTER:reference::VARCHAR, ':', -1)  AS ENCOUNTER_ID
 
 FROM FOUNDATION.PATIENT p
 JOIN FOUNDATION.OBSERVATION o
-    ON o.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+    ON SPLIT_PART(o.FHIR_SUBJECT:reference::VARCHAR, ':', -1) = p.RESOURCE_ID;
 
 
 -- ---------------------------------------------------------------------------
@@ -211,11 +221,18 @@ SELECT
     r.FHIR_REASONCODE[0]:coding[0]:display::VARCHAR           AS PROCEDURE_REASON,
 
     -- Linked encounter
-    SPLIT_PART(r.FHIR_ENCOUNTER:reference::VARCHAR, '/', -1)  AS ENCOUNTER_ID
+    SPLIT_PART(r.FHIR_ENCOUNTER:reference::VARCHAR, ':', -1)  AS ENCOUNTER_ID
 
 FROM FOUNDATION.PATIENT p
 JOIN FOUNDATION.PROCEDURE r
-    ON r.FHIR_SUBJECT:reference::VARCHAR = 'Patient/' || p.RESOURCE_ID;
+    ON SPLIT_PART(r.FHIR_SUBJECT:reference::VARCHAR, ':', -1) = p.RESOURCE_ID;
+
+    SELECT * FROM ACCESS.VW_VISITS LIMIT 5;
+    SELECT * FROM ACCESS.VW_DIAGNOSES LIMIT 5;
+    SELECT * FROM ACCESS.VW_MEDICATIONS LIMIT 5;
+    SELECT * FROM ACCESS.VW_CLAIMS LIMIT 5;
+    SELECT * FROM ACCESS.VW_OBSERVATIONS LIMIT 5;
+    SELECT * FROM ACCESS.VW_PROCEDURES LIMIT 5;
 
 
 -- ---------------------------------------------------------------------------

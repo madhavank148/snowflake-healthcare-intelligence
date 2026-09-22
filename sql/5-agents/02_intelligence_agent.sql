@@ -147,14 +147,20 @@ CREATE OR REPLACE AGENT SEMANTIC.HEALTHCARE_INTELLIGENCE_AGENT
   tool_resources:
     Visits_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_VISITS"
+      warehouse: "COMPUTE_WH"
     Diagnoses_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_DIAGNOSES"
+      warehouse: "COMPUTE_WH"
     Medications_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_MEDICATIONS"
+      warehouse: "COMPUTE_WH"
     Claims_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_CLAIMS"
+      warehouse: "COMPUTE_WH"
     Observations_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_OBSERVATIONS"
+      warehouse: "COMPUTE_WH"
     Procedures_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_PROCEDURES"
+      warehouse: "COMPUTE_WH"
   $$;
