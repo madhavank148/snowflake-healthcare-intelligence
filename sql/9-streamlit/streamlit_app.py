@@ -219,12 +219,12 @@ def call_agent(agent_fqn: str, question: str, history: list = None) -> dict:
         "content": [{"type": "text", "text": question}]
     })
     payload = json.dumps({"messages": messages})
-    # Use a unique tag delimiter to avoid $$ collision with payload content
-    tag = "AGENT_PAYLOAD_" + str(int(time.time()))
+    # Escape any $$ sequences in the payload to prevent breaking Snowflake dollar-quoting
+    safe_payload = payload.replace("$$", "$ $")
     sql = f"""
     SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
         '{agent_fqn}',
-        ${tag}${payload}${tag}$,
+        $${safe_payload}$$,
         TRUE
     ) AS RESPONSE
     """
