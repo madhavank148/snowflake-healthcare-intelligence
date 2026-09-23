@@ -383,7 +383,7 @@ def render_lineage(tools_called: list[str]):
         st.caption("No tool calls detected in this response")
 
 
-def auto_chart(df: pd.DataFrame):
+def auto_chart(df: pd.DataFrame, chart_key: str = ""):
     """Generate appropriate Plotly chart based on the data shape."""
     if df.empty or len(df.columns) < 2:
         return
@@ -420,7 +420,7 @@ def auto_chart(df: pd.DataFrame):
             legend=dict(font=dict(color="#CBD5E1")),
             margin=dict(t=30, b=30, l=30, r=30),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"pie_{chart_key}")
     else:
         # Horizontal bar for rankings
         df_sorted = df.sort_values(val, ascending=True).tail(15)
@@ -436,7 +436,7 @@ def auto_chart(df: pd.DataFrame):
             yaxis=dict(gridcolor="#334155", title_font_color="#94A3B8"),
             margin=dict(t=30, b=30, l=10, r=10),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"bar_{chart_key}")
 
     # If multiple numeric columns, show a grouped bar
     if len(num_cols) > 1:
@@ -452,7 +452,7 @@ def auto_chart(df: pd.DataFrame):
             yaxis=dict(gridcolor="#334155"),
             margin=dict(t=30, b=30),
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, key=f"grp_{chart_key}")
 
 
 # ---------------------------------------------------------------------------
@@ -474,12 +474,12 @@ for entry in st.session_state.messages:
         # Re-render visuals for assistant messages
         if role == "assistant":
             if entry.get("dataframes"):
-                for title, df_data in entry["dataframes"]:
+                for idx, (title, df_data) in enumerate(entry["dataframes"]):
                     df = pd.DataFrame(df_data) if isinstance(df_data, list) else df_data
                     st.markdown(f"**{title}**")
                     chart_col, table_col = st.columns([3, 2])
                     with chart_col:
-                        auto_chart(df)
+                        auto_chart(df, chart_key=f"hist_{len(st.session_state.messages)}_{idx}")
                     with table_col:
                         st.dataframe(df, use_container_width=True, hide_index=True)
 
@@ -536,16 +536,14 @@ if question:
 
         # Render data tables + fallback Plotly charts
         if data_frames:
-            for title, df in data_frames:
+            for idx, (title, df) in enumerate(data_frames):
                 st.markdown(f"**{title}**")
                 if vega_charts:
-                    # Agent already provided a chart, just show the table
                     st.dataframe(df, use_container_width=True, hide_index=True)
                 else:
-                    # No agent chart — generate our own
                     chart_col, table_col = st.columns([3, 2])
                     with chart_col:
-                        auto_chart(df)
+                        auto_chart(df, chart_key=f"live_{idx}")
                     with table_col:
                         st.dataframe(df, use_container_width=True, hide_index=True)
 
