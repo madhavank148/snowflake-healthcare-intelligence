@@ -1,9 +1,9 @@
 import os
 import json
+import time
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -52,11 +52,22 @@ SAMPLE_QUESTIONS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Custom CSS for rich dark-themed UI
+# Custom CSS — dynamic theme
 # ---------------------------------------------------------------------------
-st.markdown("""
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = True
+
+# Theme-aware colors
+if st.session_state.dark_mode:
+    BG = "#0F172A"; BG2 = "#1E293B"; TEXT = "#E2E8F0"; TEXT_MUTED = "#94A3B8"
+    GRID = "#334155"; BORDER = "#334155"; CARD_INACTIVE_BG = "rgba(71,85,105,0.1)"
+else:
+    BG = "#FFFFFF"; BG2 = "#F8FAFC"; TEXT = "#1E293B"; TEXT_MUTED = "#64748B"
+    GRID = "#E2E8F0"; BORDER = "#CBD5E1"; CARD_INACTIVE_BG = "rgba(148,163,184,0.08)"
+
+st.markdown(f"""
 <style>
-    .main-header {
+    .main-header {{
         background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #2DD4BF 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -64,14 +75,14 @@ st.markdown("""
         font-weight: 800;
         letter-spacing: -0.02em;
         margin-bottom: 0;
-    }
-    .sub-header {
-        color: #94A3B8;
+    }}
+    .sub-header {{
+        color: {TEXT_MUTED};
         font-size: 1.05rem;
         margin-top: -0.5rem;
         margin-bottom: 1.5rem;
-    }
-    .tool-node {
+    }}
+    .tool-node {{
         border-radius: 12px;
         padding: 12px 16px;
         text-align: center;
@@ -84,21 +95,21 @@ st.markdown("""
         align-items: center;
         justify-content: center;
         gap: 4px;
-    }
-    .tool-active {
+    }}
+    .tool-active {{
         box-shadow: 0 0 20px rgba(79,70,229,0.4);
         transform: scale(1.03);
-    }
-    .tool-inactive {
+    }}
+    .tool-inactive {{
         opacity: 0.35;
-    }
-    .lineage-arrow {
+    }}
+    .lineage-arrow {{
         color: #4F46E5;
         font-size: 1.5rem;
         text-align: center;
         line-height: 2;
-    }
-    .orchestrator-badge {
+    }}
+    .orchestrator-badge {{
         background: linear-gradient(135deg, #4F46E5, #7C3AED);
         color: white;
         padding: 8px 20px;
@@ -108,16 +119,7 @@ st.markdown("""
         display: inline-block;
         text-align: center;
         box-shadow: 0 4px 15px rgba(79,70,229,0.3);
-    }
-    .sql-block {
-        background: #1E293B;
-        border: 1px solid #334155;
-        border-radius: 8px;
-        padding: 12px;
-        font-family: monospace;
-        font-size: 0.82rem;
-        overflow-x: auto;
-    }
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -140,27 +142,45 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
+    st.space("small")
+
+    # Theme toggle
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = True
+    dark_mode = st.toggle("Dark mode", value=st.session_state.dark_mode, key="theme_toggle")
+    st.session_state.dark_mode = dark_mode
+
     st.space("medium")
     st.markdown("### :material/architecture: Agent architecture")
 
+    # Rich architecture diagram with styled HTML
     st.markdown("""
-    ```
-    User question
-      |
-      v
-    Intelligence Agent
-      |--- Visits Analyst
-      |--- Diagnoses Analyst
-      |--- Medications Analyst
-      |--- Claims Analyst
-      |--- Observations Analyst
-      |--- Procedures Analyst
-      |--- data_to_chart
-      |
-      v
-    Response + Charts
-    ```
-    """)
+    <div style="padding:12px; border-radius:12px; background:linear-gradient(135deg, rgba(79,70,229,0.08), rgba(44,212,191,0.08)); border:1px solid #334155;">
+        <div style="text-align:center; margin-bottom:10px;">
+            <span style="background:#4F46E5; color:white; padding:5px 14px; border-radius:8px; font-size:0.78rem; font-weight:600;">
+            User Question</span>
+        </div>
+        <div style="text-align:center; color:#4F46E5; font-size:1.2rem;">&#8595;</div>
+        <div style="text-align:center; margin:6px 0;">
+            <span style="background:linear-gradient(135deg,#4F46E5,#7C3AED); color:white; padding:7px 16px; border-radius:10px; font-size:0.82rem; font-weight:700; box-shadow:0 2px 8px rgba(79,70,229,0.3);">
+            Healthcare Intelligence Agent</span>
+        </div>
+        <div style="text-align:center; color:#4F46E5; font-size:1.2rem;">&#8595;</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:8px 0;">
+            <div style="background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:6px; text-align:center; font-size:0.72rem; font-weight:600; color:#3B82F6;">Visits</div>
+            <div style="background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3); border-radius:8px; padding:6px; text-align:center; font-size:0.72rem; font-weight:600; color:#22C55E;">Diagnoses</div>
+            <div style="background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:6px; text-align:center; font-size:0.72rem; font-weight:600; color:#A855F7;">Medications</div>
+            <div style="background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.3); border-radius:8px; padding:6px; text-align:center; font-size:0.72rem; font-weight:600; color:#F97316;">Claims</div>
+            <div style="background:rgba(20,184,166,0.12); border:1px solid rgba(20,184,166,0.3); border-radius:8px; padding:6px; text-align:center; font-size:0.72rem; font-weight:600; color:#14B8A6;">Observations</div>
+            <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:6px; text-align:center; font-size:0.72rem; font-weight:600; color:#EF4444;">Procedures</div>
+        </div>
+        <div style="text-align:center; color:#4F46E5; font-size:1.2rem;">&#8595;</div>
+        <div style="text-align:center;">
+            <span style="background:rgba(99,102,241,0.15); color:#6366F1; padding:5px 14px; border-radius:8px; font-size:0.78rem; font-weight:600; border:1px solid rgba(99,102,241,0.3);">
+            Response + Charts</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.space("medium")
     st.markdown("### :material/lightbulb: Quick questions")
@@ -168,21 +188,43 @@ with st.sidebar:
         if st.button(q, key=f"sample_{q}", use_container_width=True):
             st.session_state["prefill_question"] = q
 
+    st.space("large")
+    if st.button(":material/delete: Clear chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def call_agent(agent_fqn: str, question: str) -> dict:
-    """Call a Cortex Agent via DATA_AGENT_RUN and return parsed JSON."""
-    payload = json.dumps({
-        "messages": [
-            {"role": "user", "content": [{"type": "text", "text": question}]}
-        ]
+def call_agent(agent_fqn: str, question: str, history: list = None) -> dict:
+    """Call a Cortex Agent via DATA_AGENT_RUN with optional conversation history."""
+    messages = []
+    # Include last 5 turns max to avoid payload size limits
+    if history:
+        recent = [m for m in history if m["role"] in ("user", "assistant")][-10:]
+        for msg in recent:
+            if msg["role"] == "user":
+                messages.append({
+                    "role": "user",
+                    "content": [{"type": "text", "text": msg["content"]}]
+                })
+            elif msg["role"] == "assistant":
+                messages.append({
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": msg["content"][:2000]}]
+                })
+    messages.append({
+        "role": "user",
+        "content": [{"type": "text", "text": question}]
     })
+    payload = json.dumps({"messages": messages})
+    # Use a unique tag delimiter to avoid $$ collision with payload content
+    tag = "AGENT_PAYLOAD_" + str(int(time.time()))
     sql = f"""
     SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
         '{agent_fqn}',
-        $${payload}$$,
+        ${tag}${payload}${tag}$,
         TRUE
     ) AS RESPONSE
     """
@@ -237,9 +279,13 @@ def extract_text(response: dict) -> str:
     for block in get_content_blocks(response):
         if block.get("type") == "text":
             texts.append(block.get("text", ""))
-    # Only keep the substantive text blocks (skip short routing messages)
-    final_texts = [t for t in texts if len(t) > 50] or texts[-1:] if texts else []
-    return "\n\n".join(final_texts) if final_texts else "No response text found."
+    if not texts:
+        return "No response text found."
+    # Keep substantive text blocks; fall back to last block if all are short
+    final_texts = [t for t in texts if len(t) > 50]
+    if not final_texts:
+        final_texts = texts[-1:]
+    return "\n\n".join(final_texts)
 
 
 def extract_sql(response: dict) -> list[str]:
@@ -265,19 +311,21 @@ def extract_sql(response: dict) -> list[str]:
 
 
 def extract_data(response: dict) -> list[tuple[str, pd.DataFrame]]:
-    """Extract data results as (title, DataFrame) tuples from table blocks and tool results."""
+    """Extract data results as (title, DataFrame) tuples. Deduplicates by query_id."""
     frames = []
+    seen_query_ids = set()
+
+    # First pass: explicit table blocks (preferred — agent-formatted for display)
     for block in get_content_blocks(response):
-        # Explicit table blocks (agent formats these for display)
         if block.get("type") == "table":
             table_info = block.get("table", {})
             title = table_info.get("title", "Results")
+            qid = table_info.get("query_id", "")
             rs = table_info.get("result_set", {})
             col_names = [c["name"] for c in rs.get("resultSetMetaData", {}).get("rowType", [])]
             data = rs.get("data", [])
             if data and col_names:
                 df = pd.DataFrame(data, columns=col_names)
-                # Convert numeric columns
                 for col_meta in rs.get("resultSetMetaData", {}).get("rowType", []):
                     if col_meta.get("type") == "fixed":
                         try:
@@ -285,12 +333,19 @@ def extract_data(response: dict) -> list[tuple[str, pd.DataFrame]]:
                         except (ValueError, KeyError):
                             pass
                 frames.append((title, df))
-        # Also pull from system_execute_sql results (for single-row summaries)
+                if qid:
+                    seen_query_ids.add(qid)
+
+    # Second pass: system_execute_sql results (only if not already seen via table block)
+    for block in get_content_blocks(response):
         if block.get("type") == "tool_result":
             tool_info = block.get("tool_result", block)
             if tool_info.get("name") == "system_execute_sql":
                 for item in tool_info.get("content", []):
                     if isinstance(item, dict) and item.get("type") == "json":
+                        qid = item.get("json", {}).get("query_id", "")
+                        if qid in seen_query_ids:
+                            continue
                         rs = item.get("json", {}).get("result_set", {})
                         col_names = [c["name"] for c in rs.get("resultSetMetaData", {}).get("rowType", [])]
                         data = rs.get("data", [])
@@ -303,6 +358,8 @@ def extract_data(response: dict) -> list[tuple[str, pd.DataFrame]]:
                                     except (ValueError, KeyError):
                                         pass
                             frames.append(("Results", df))
+                            if qid:
+                                seen_query_ids.add(qid)
     return frames
 
 
@@ -389,8 +446,6 @@ def auto_chart(df: pd.DataFrame, chart_key: str = ""):
         return
 
     cols = df.columns.tolist()
-
-    # Find numeric and categorical columns
     num_cols = df.select_dtypes(include=["number"]).columns.tolist()
     cat_cols = [c for c in cols if c not in num_cols]
 
@@ -400,9 +455,15 @@ def auto_chart(df: pd.DataFrame, chart_key: str = ""):
     cat = cat_cols[0]
     val = num_cols[0]
 
-    # Color palette matching agent theme
     palette = ["#4F46E5", "#3B82F6", "#22C55E", "#A855F7", "#F97316", "#14B8A6",
                "#EF4444", "#6366F1", "#EC4899", "#F59E0B"]
+
+    # Theme-aware chart styling
+    is_dark = st.session_state.get("dark_mode", True)
+    paper_bg = "rgba(0,0,0,0)"
+    plot_bg = "rgba(0,0,0,0)"
+    font_clr = "#E2E8F0" if is_dark else "#1E293B"
+    grid_clr = "#334155" if is_dark else "#E2E8F0"
 
     row_count = len(df)
 
@@ -414,10 +475,10 @@ def auto_chart(df: pd.DataFrame, chart_key: str = ""):
             hole=0.4,
         )
         fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#E2E8F0",
-            legend=dict(font=dict(color="#CBD5E1")),
+            paper_bgcolor=paper_bg,
+            plot_bgcolor=plot_bg,
+            font_color=font_clr,
+            legend=dict(font=dict(color=font_clr)),
             margin=dict(t=30, b=30, l=30, r=30),
         )
         st.plotly_chart(fig, use_container_width=True, key=f"pie_{chart_key}")
@@ -429,11 +490,11 @@ def auto_chart(df: pd.DataFrame, chart_key: str = ""):
             color_discrete_sequence=["#4F46E5"],
         )
         fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#E2E8F0",
-            xaxis=dict(gridcolor="#334155", title_font_color="#94A3B8"),
-            yaxis=dict(gridcolor="#334155", title_font_color="#94A3B8"),
+            paper_bgcolor=paper_bg,
+            plot_bgcolor=plot_bg,
+            font_color=font_clr,
+            xaxis=dict(gridcolor=grid_clr, title_font_color=font_clr),
+            yaxis=dict(gridcolor=grid_clr, title_font_color=font_clr),
             margin=dict(t=30, b=30, l=10, r=10),
         )
         st.plotly_chart(fig, use_container_width=True, key=f"bar_{chart_key}")
@@ -445,11 +506,11 @@ def auto_chart(df: pd.DataFrame, chart_key: str = ""):
             color_discrete_sequence=palette,
         )
         fig2.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#E2E8F0",
-            xaxis=dict(gridcolor="#334155"),
-            yaxis=dict(gridcolor="#334155"),
+            paper_bgcolor=paper_bg,
+            plot_bgcolor=plot_bg,
+            font_color=font_clr,
+            xaxis=dict(gridcolor=grid_clr),
+            yaxis=dict(gridcolor=grid_clr),
             margin=dict(t=30, b=30),
         )
         st.plotly_chart(fig2, use_container_width=True, key=f"grp_{chart_key}")
@@ -464,116 +525,175 @@ if "prefill_question" not in st.session_state:
     st.session_state.prefill_question = None
 
 # ---------------------------------------------------------------------------
-# Chat history
+# Tabs: Chat | History
 # ---------------------------------------------------------------------------
-for msg_idx, entry in enumerate(st.session_state.messages):
-    role = entry["role"]
-    with st.chat_message(role, avatar=":material/person:" if role == "user" else ":material/smart_toy:"):
-        st.markdown(entry["content"])
+tab_chat, tab_history = st.tabs([
+    ":material/chat: Chat",
+    ":material/history: History",
+])
 
-        # Re-render visuals for assistant messages
-        if role == "assistant":
-            if entry.get("dataframes"):
-                for idx, (title, df_data) in enumerate(entry["dataframes"]):
-                    df = pd.DataFrame(df_data) if isinstance(df_data, list) else df_data
+# ======================== TAB: CHAT ========================================
+with tab_chat:
+    # Render current conversation
+    for msg_idx, entry in enumerate(st.session_state.messages):
+        role = entry["role"]
+        with st.chat_message(role, avatar=":material/person:" if role == "user" else ":material/smart_toy:"):
+            st.markdown(entry["content"])
+
+            if role == "assistant":
+                # Replay Vega charts if saved
+                if entry.get("vega_charts"):
+                    for spec in entry["vega_charts"]:
+                        st.vega_lite_chart(spec, use_container_width=True)
+
+                # Show data tables (with Plotly fallback only if no Vega charts)
+                if entry.get("dataframes"):
+                    for idx, (title, df_data) in enumerate(entry["dataframes"]):
+                        df = pd.DataFrame(df_data) if isinstance(df_data, list) else df_data
+                        st.markdown(f"**{title}**")
+                        if entry.get("vega_charts"):
+                            st.dataframe(df, use_container_width=True, hide_index=True)
+                        else:
+                            chart_col, table_col = st.columns([3, 2])
+                            with chart_col:
+                                auto_chart(df, chart_key=f"hist_{msg_idx}_{idx}")
+                            with table_col:
+                                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                if entry.get("sql_statements"):
+                    with st.expander(":material/code: Generated SQL", expanded=False):
+                        for sql_stmt in entry["sql_statements"]:
+                            st.code(sql_stmt, language="sql")
+
+                if entry.get("tools_called"):
+                    with st.expander(":material/account_tree: Agent routing", expanded=False):
+                        render_lineage(entry["tools_called"])
+
+    # Input handling
+    prefill = st.session_state.pop("prefill_question", None)
+    if prefill:
+        question = prefill
+    else:
+        question = st.chat_input("Ask your healthcare data a question...")
+
+    if question:
+        st.session_state.messages.append({"role": "user", "content": question})
+        with st.chat_message("user", avatar=":material/person:"):
+            st.write(question)
+
+        agent_fqn = AGENTS[agent_choice]
+        with st.chat_message("assistant", avatar=":material/smart_toy:"):
+            with st.spinner("Thinking..."):
+                t0 = time.time()
+                try:
+                    response = call_agent(agent_fqn, question, history=st.session_state.messages[:-1])
+                except Exception as e:
+                    st.error(f"Agent call failed: {e}")
+                    st.stop()
+                elapsed = round(time.time() - t0, 1)
+
+            st.caption(f"Answered in {elapsed}s")
+
+            text = extract_text(response)
+            tools_called = extract_tool_calls(response)
+            sql_statements = extract_sql(response)
+            data_frames = extract_data(response)
+            vega_charts = extract_vega_charts(response)
+            suggested = extract_suggested_queries(response)
+
+            st.markdown(text)
+
+            if vega_charts:
+                for spec in vega_charts:
+                    st.vega_lite_chart(spec, use_container_width=True)
+
+            if data_frames:
+                for idx, (title, df) in enumerate(data_frames):
                     st.markdown(f"**{title}**")
-                    chart_col, table_col = st.columns([3, 2])
-                    with chart_col:
-                        auto_chart(df, chart_key=f"hist_{msg_idx}_{idx}")
-                    with table_col:
+                    if vega_charts:
                         st.dataframe(df, use_container_width=True, hide_index=True)
+                    else:
+                        chart_col, table_col = st.columns([3, 2])
+                        with chart_col:
+                            auto_chart(df, chart_key=f"live_{idx}")
+                        with table_col:
+                            st.dataframe(df, use_container_width=True, hide_index=True)
 
-            if entry.get("sql_statements"):
+            if sql_statements:
                 with st.expander(":material/code: Generated SQL", expanded=False):
-                    for sql_stmt in entry["sql_statements"]:
+                    for sql_stmt in sql_statements:
                         st.code(sql_stmt, language="sql")
 
-            if entry.get("tools_called"):
-                with st.expander(":material/account_tree: Agent routing", expanded=False):
-                    render_lineage(entry["tools_called"])
+            if tools_called:
+                with st.expander(":material/account_tree: Agent routing", expanded=True):
+                    render_lineage(tools_called)
 
+            if suggested:
+                st.markdown("**Suggested follow-ups:**")
+                cols = st.columns(len(suggested))
+                for s_idx, (col, sq) in enumerate(zip(cols, suggested)):
+                    with col:
+                        if st.button(sq, key=f"sug_{s_idx}_{hash(sq) % 10000}", use_container_width=True):
+                            st.session_state["prefill_question"] = sq
 
-# ---------------------------------------------------------------------------
-# Input handling
-# ---------------------------------------------------------------------------
-prefill = st.session_state.pop("prefill_question", None)
-if prefill:
-    question = prefill
-else:
-    question = st.chat_input("Ask your healthcare data a question...")
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": text,
+                "tools_called": tools_called,
+                "sql_statements": sql_statements,
+                "dataframes": [(t, df.to_dict("records")) for t, df in data_frames] if data_frames else [],
+                "vega_charts": vega_charts if vega_charts else [],
+            })
 
-if question:
-    # Show user message
-    st.session_state.messages.append({"role": "user", "content": question})
-    with st.chat_message("user", avatar=":material/person:"):
-        st.write(question)
+        st.rerun()
 
-    # Call agent
-    agent_fqn = AGENTS[agent_choice]
-    with st.chat_message("assistant", avatar=":material/smart_toy:"):
-        with st.spinner("Thinking..."):
-            try:
-                response = call_agent(agent_fqn, question)
-            except Exception as e:
-                st.error(f"Agent call failed: {e}")
-                st.stop()
+# ======================== TAB: HISTORY =====================================
+with tab_history:
+    if not st.session_state.messages:
+        st.info("No conversation history yet. Ask a question in the Chat tab to get started.", icon=":material/chat:")
+    else:
+        st.caption(f"{len([m for m in st.session_state.messages if m['role'] == 'user'])} questions asked this session")
 
-        # Extract response parts
-        text = extract_text(response)
-        tools_called = extract_tool_calls(response)
-        sql_statements = extract_sql(response)
-        data_frames = extract_data(response)
-        vega_charts = extract_vega_charts(response)
-        suggested = extract_suggested_queries(response)
+        for h_idx, entry in enumerate(st.session_state.messages):
+            if entry["role"] == "user":
+                # Find the matching assistant response (next message)
+                assistant_entry = None
+                if h_idx + 1 < len(st.session_state.messages) and st.session_state.messages[h_idx + 1]["role"] == "assistant":
+                    assistant_entry = st.session_state.messages[h_idx + 1]
 
-        # Render text response
-        st.markdown(text)
+                q_num = sum(1 for m in st.session_state.messages[:h_idx + 1] if m["role"] == "user")
 
-        # Render Vega-Lite charts from agent (preferred — agent-generated)
-        if vega_charts:
-            for spec in vega_charts:
-                st.vega_lite_chart(spec, use_container_width=True)
+                with st.container(border=True):
+                    # Question header
+                    st.markdown(f"**Q{q_num}:** {entry['content']}")
 
-        # Render data tables + fallback Plotly charts
-        if data_frames:
-            for idx, (title, df) in enumerate(data_frames):
-                st.markdown(f"**{title}**")
-                if vega_charts:
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-                else:
-                    chart_col, table_col = st.columns([3, 2])
-                    with chart_col:
-                        auto_chart(df, chart_key=f"live_{idx}")
-                    with table_col:
-                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    if assistant_entry:
+                        # Tools used badges
+                        if assistant_entry.get("tools_called"):
+                            tool_badges = ""
+                            for tool in assistant_entry["tools_called"]:
+                                meta = TOOL_META.get(tool)
+                                if meta:
+                                    tool_badges += f'<span style="background:{meta["bg"]}; color:{meta["color"]}; padding:2px 8px; border-radius:6px; font-size:0.7rem; font-weight:600; margin-right:4px; border:1px solid {meta["color"]}30;">{meta["label"]}</span>'
+                            if tool_badges:
+                                st.markdown(f"<div style='margin:4px 0 8px 0;'>{tool_badges}</div>", unsafe_allow_html=True)
 
-        # SQL accordion
-        if sql_statements:
-            with st.expander(":material/code: Generated SQL", expanded=False):
-                for sql_stmt in sql_statements:
-                    st.code(sql_stmt, language="sql")
+                        # Answer text (truncated)
+                        answer = assistant_entry["content"]
+                        if len(answer) > 300:
+                            st.markdown(answer[:300] + "...")
+                        else:
+                            st.markdown(answer)
 
-        # Agent routing lineage
-        if tools_called:
-            with st.expander(":material/account_tree: Agent routing", expanded=True):
-                render_lineage(tools_called)
+                        # Show data tables
+                        if assistant_entry.get("dataframes"):
+                            for d_idx, (title, df_data) in enumerate(assistant_entry["dataframes"]):
+                                df = pd.DataFrame(df_data) if isinstance(df_data, list) else df_data
+                                with st.expander(f":material/table_chart: {title}", expanded=False):
+                                    st.dataframe(df, use_container_width=True, hide_index=True)
 
-        # Suggested follow-up questions
-        if suggested:
-            st.markdown("**Suggested follow-ups:**")
-            cols = st.columns(len(suggested))
-            for col, sq in zip(cols, suggested):
-                with col:
-                    if st.button(sq, key=f"sug_{sq[:30]}", use_container_width=True):
-                        st.session_state["prefill_question"] = sq
-
-        # Save to session
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": text,
-            "tools_called": tools_called,
-            "sql_statements": sql_statements,
-            "dataframes": [(t, df.to_dict("records")) for t, df in data_frames] if data_frames else [],
-        })
-
-    st.rerun()
+                        # SQL
+                        if assistant_entry.get("sql_statements"):
+                            with st.expander(":material/code: SQL", expanded=False):
+                                for sql_stmt in assistant_entry["sql_statements"]:
+                                    st.code(sql_stmt, language="sql")
