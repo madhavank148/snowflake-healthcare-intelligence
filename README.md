@@ -13,6 +13,12 @@ MVP repo for a Snowflake-native healthcare data + AI intelligence platform: it t
 
 Everything lives under one database, `HEALTHCARE_INTELLIGENCE_DB`, in 5 schemas: `RAW`, `FOUNDATION`, `ACCESS`, `RECONCILIATION`, `SEMANTIC`.
 
+## Architecture
+
+![Architecture diagram](docs/images/architecture_diagram.png)
+
+The flow: FHIR bundles land in `RAW` → get split into typed `FOUNDATION` tables (with a parallel `RECONCILIATION` check) → get flattened into 7 `ACCESS.VW_*` views (one per data product) → get modeled as 7 `SEMANTIC.SV_*` semantic views for Cortex Analyst → get wrapped by 6 domain agents plus one orchestrator (`HEALTHCARE_INTELLIGENCE_AGENT`) plus one pipeline-health agent (`RECONCILIATION_AGENT`) → get exposed four ways: a Streamlit chat app, native Snowsight/Snowflake Intelligence chat, `DATA_AGENT_RUN()` from SQL, and an MCP server for external clients (Claude Desktop, custom apps, etc.).
+
 ## Repo structure
 
 `sql/` is organized by object type, with each top-level folder numbered in the order you actually run it — so the folder listing itself is the run order, no need to cross-reference a separate section to know what comes first:
@@ -31,69 +37,37 @@ sql/
 
 Numeric prefixes on the files *inside* each folder indicate run order within that folder (e.g. `2-tables/01_raw_bundle_raw.sql` before `2-tables/02_foundation_tables.sql`).
 
-## Layer-by-layer object inventory
+## Ways to call the agent
 
-### RAW — landing zone (`sql/2-tables/01_raw_bundle_raw.sql`)
-Untouched FHIR Bundle JSON, one row per file.
-- `RAW.JSON_FORMAT` — file format (`TYPE = JSON`)
-- `RAW.FHIR_STAGE` — internal stage for `PUT`-ing local files
-- `RAW.BUNDLE_RAW` — table: `TRACKING_ID` (UUID, generated per load), `SOURCE_FILE_NAME`, `RAW_LOAD_TS`, `BUNDLE_JSON` (`VARIANT`, the whole Bundle)
+The same `HEALTHCARE_INTELLIGENCE_AGENT` is reachable through four different front doors — pick whichever fits the consumer:
 
-### FOUNDATION — split & typed, semi-flat (`sql/2-tables/02_foundation_tables.sql`)
-One table per FHIR `resourceType`, 24 total. Every table has the same lineage columns (`RESOURCE_ID`, `BUNDLE_TRACK_ID_REF` → `RAW.BUNDLE_RAW.TRACKING_ID`, `SOURCE_FILE_NAME`, `ENTRY_INDEX`, `FOUNDATION_LOAD_TS`) plus one `FHIR_<FIELD>` `VARIANT` column per root-level JSON field of that resource — nested structure inside each field (e.g. `name[0].given`) is kept as-is, not flattened further.
+| Channel | How | Best for |
+|---|---|---|
+| **Streamlit in Snowflake** | `sql/9-streamlit/streamlit_app.py`, deployed as a Streamlit app inside Snowflake | A branded chat UI for business users, with generated SQL and charts shown inline |
+| **Snowsight / Snowflake Intelligence** | Native chat against the agent object directly in Snowsight — no code to write | Fastest way to demo or explore, zero deployment |
+| **SQL** | `SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(...)` (see `sql/8-queries/02_demo_queries.sql`) | Calling the agent from any SQL client, notebook, or orchestration job |
+| **MCP Server** | `SEMANTIC.HEALTHCARE_MCP_SERVER` (`sql/6-mcp/01_mcp_server.sql`) | External MCP clients outside Snowflake — Claude Desktop, custom apps, Slack bots |
 
-- **20 clinical resource tables**: `PATIENT`, `ENCOUNTER`, `CONDITION`, `OBSERVATION`, `PROCEDURE`, `CLAIM`, `EXPLANATION_OF_BENEFIT`, `DIAGNOSTIC_REPORT`, `DOCUMENT_REFERENCE`, `IMMUNIZATION`, `MEDICATION_REQUEST`, `MEDICATION`, `MEDICATION_ADMINISTRATION`, `CARE_TEAM`, `CARE_PLAN`, `SUPPLY_DELIVERY`, `PROVENANCE`, `ALLERGY_INTOLERANCE`, `DEVICE`, `IMAGING_STUDY`
-- **4 directory/reference tables**: `ORGANIZATION`, `LOCATION`, `PRACTITIONER`, `PRACTITIONER_ROLE` (from Synthea's separate hospital/practitioner bundles — referenced by identifier, not by plain `Type/<id>`, see notes in `sql/3-views/01_access_views.sql`)
+The MCP server definition itself is a ~40-line `CREATE MCP SERVER ... FROM SPECIFICATION` block — one `tool` entry of `type: CORTEX_AGENT_RUN` pointing at the orchestrator agent by its fully-qualified name. See `sql/6-mcp/01_mcp_server.sql` for the full spec.
 
-### RECONCILIATION — pipeline health (`sql/2-tables/03_reconciliation_table.sql`)
-- `RECONCILIATION.LOAD_SUMMARY` — one row per bundle × resource type: `TRACKING_ID`, `SOURCE_FILE_NAME`, `RESOURCE_TYPE`, `RAW_ENTRY_COUNT`, `FOUNDATION_LOADED_COUNT`, `LOAD_TS`, `STATUS` (`MATCHED` / `MISMATCH` / `NOT_TRACKED`)
+![MCP server code](docs/images/mcp_server_code.png)
 
-### ACCESS — consumption views (`sql/3-views/`)
-**`01_access_views.sql`** — 52 views directly over `FOUNDATION`, still holding `VARIANT` columns:
-- 24 plain `<RESOURCE>_VIEW`s, one per `FOUNDATION` table
-- ~17 `PATIENT_<RESOURCE>_VIEW`s joining each clinical resource back to its patient
-- 4 `ENCOUNTER_<RESOURCE>_VIEW`s ("what happened during this visit")
-- `CLAIM_EXPLANATION_OF_BENEFIT_VIEW` (billing chain)
-- `PATIENT_360_VIEW` (per-patient counts across every resource type)
-- 5 directory views: `LOCATION_ORGANIZATION_VIEW`, `PRACTITIONER_ROLE_DETAIL_VIEW`, `ENCOUNTER_ORGANIZATION_VIEW`, `ENCOUNTER_LOCATION_VIEW`, `ENCOUNTER_PRACTITIONER_VIEW`
+### Demo — Streamlit chat in action
 
-**`02_access_flattened_views.sql`** — 7 more views, this time with clean **typed/scalar** columns (no `VARIANT`), purpose-built as the source for the semantic layer:
-- `VW_VISITS` (grain: one row per encounter, enriched with patient/org/location/practitioner)
-- `VW_DIAGNOSES` (one row per condition)
-- `VW_MEDICATIONS` (one row per medication request)
-- `VW_CLAIMS` (one row per claim)
-- `VW_OBSERVATIONS` (one row per lab/vital observation)
-- `VW_PROCEDURES` (one row per procedure)
-- `VW_RECONCILIATION` (clean read of `RECONCILIATION.LOAD_SUMMARY`, adds `MISMATCH_COUNT`)
+![Streamlit demo](docs/images/streamlit_demo_chat.png)
 
-### SEMANTIC — Cortex Analyst semantic views (`sql/4-semanticViews/`)
-7 `CREATE SEMANTIC VIEW` objects, each with `TABLES` / `DIMENSIONS` / `METRICS` / `COMMENT`, one per `VW_*` view:
-- `SV_VISITS`, `SV_DIAGNOSES`, `SV_MEDICATIONS`, `SV_CLAIMS`, `SV_OBSERVATIONS`, `SV_PROCEDURES` (in `01_semantic_views.sql`)
-- `SV_RECONCILIATION` (in `02_reconciliation_semantic_view.sql`, over `VW_RECONCILIATION`)
+A real session against `HEALTHCARE_INTELLIGENCE_AGENT`: the user asks *"How many visits by encounter class?"*, gets a table + bar chart back, then asks a **follow-up** — *"What is the average length of stay for each encounter class?"* — and the agent answers in context, still returning both a chart and a table. Each answer panel also has collapsible **Generated SQL** and **Agent routing** sections (which tool(s) were invoked, e.g. `Visits_Analyst` → `data_to_chart`) so you can audit exactly how the answer was produced.
 
-These define the business vocabulary (synonyms, comments) Cortex Analyst uses to turn natural-language questions into SQL against the `VW_*` views.
+## Observability
 
-### SEMANTIC — Cortex Agents (`sql/5-agents/`)
-- **6 product agents** (`01_product_agents.sql`), one per domain, each with a single `cortex_analyst_text_to_sql` tool bound to its semantic view, plus a `data_to_chart` tool:
-  `VISITS_AGENT` → `SV_VISITS`, `DIAGNOSES_AGENT` → `SV_DIAGNOSES`, `MEDICATIONS_AGENT` → `SV_MEDICATIONS`, `CLAIMS_AGENT` → `SV_CLAIMS`, `OBSERVATIONS_AGENT` → `SV_OBSERVATIONS`, `PROCEDURES_AGENT` → `SV_PROCEDURES`
-- **`HEALTHCARE_INTELLIGENCE_AGENT`** (`02_intelligence_agent.sql`) — the top-level orchestrator. Holds all 6 semantic views as tools, routes each question to the right domain(s), and synthesizes cross-domain answers (e.g. "top diagnoses for ED visits" → Visits + Diagnoses). This is the agent exposed via MCP.
-- **`RECONCILIATION_AGENT`** (`03_reconciliation_agent.sql`) — separate agent for data engineers/pipeline operators, answers pipeline-health questions over `SV_RECONCILIATION` (not part of the clinical orchestrator, different audience).
+Every Cortex Agent gets automatic observability in Snowsight — no extra instrumentation needed. Two views into it:
 
-### SEMANTIC — MCP Server (`sql/6-mcp/01_mcp_server.sql`)
-- `SEMANTIC.HEALTHCARE_MCP_SERVER` — exposes `HEALTHCARE_INTELLIGENCE_AGENT` as a single MCP tool (`CORTEX_AGENT_RUN`) to external MCP clients (Claude Desktop, custom apps, Slack bots, etc.). It's a thin pass-through; all routing/reasoning happens inside the agent.
+![Agent threads](docs/images/observability_agent_threads.png)
 
-## Run order
+**Threads/Sessions** (agent's *Observability* tab): every question asked, by whom, when, and how long the conversation ran — a running audit log of "what got asked, of which agent."
 
-Setup (DDL, run once):
-`1-setup/01_database_and_schemas.sql` → `2-tables/01_raw_bundle_raw.sql` → `2-tables/02_foundation_tables.sql` → `2-tables/03_reconciliation_table.sql` → `3-views/01_access_views.sql` → `3-views/02_access_flattened_views.sql` → `4-semanticViews/01_semantic_views.sql` → `4-semanticViews/02_reconciliation_semantic_view.sql` → `5-agents/01_product_agents.sql` → `5-agents/02_intelligence_agent.sql` → `5-agents/03_reconciliation_agent.sql` → `6-mcp/01_mcp_server.sql`
+![Trace detail](docs/images/observability_trace_detail.png)
 
-Load (data, run after setup, and re-run `7-load/02`/`7-load/03` whenever data changes):
-`7-load/01_load_raw.sql` (needs a client with local filesystem access — SnowSQL or the VS Code Snowflake extension, **not** Snowsight's browser worksheet) → `7-load/02_load_foundation.sql` → `7-load/03_load_reconciliation.sql`
+**Trace detail** (click into a thread): the full execution path for that turn — `LLM Planning` → `SQL Execution` → `Chart Generation` → `LLM Response Generation` — each step timed individually, plus the **model actually used** (e.g. `claude-opus-4-8`), **input/output/plan token counts**, the generated SQL, the semantic model it hit, and the final response text. This is what you'd pull up to debug a wrong answer, check cost per question, or prove which model answered what.
 
-Verify:
-`8-queries/01_reconciliation_verify.sql` (read-only row counts / samples / mismatch checks across every layer) and `8-queries/02_demo_queries.sql` (end-to-end smoke test: flattened views → semantic views via `SEMANTIC_VIEW()` → agents via `DATA_AGENT_RUN` → MCP server introspection → data-quality spot checks).
-
-## Other files
-
-- `resources/sample_synthetic_data_fhir_r4/` — Synthea-generated FHIR R4 sample data: 109 per-patient transaction Bundles plus two reference bundles (`hospitalInformation...json` → Organization/Location, `practitionerInformation...json` → Practitioner/PractitionerRole).
-- `docs/Snowflake_intelligent_dataproduct.html` — the original architecture/vision writeup (Cortex Analyst semantic models, MCP agents) that this platform implements.
+See Snowflake's own documentation on Cortex Agents observability for the full reference of what's tracked and how to query it programmatically.

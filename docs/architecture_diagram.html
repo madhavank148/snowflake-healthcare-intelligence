@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Healthcare Intelligence Platform — Architecture</title>
+<style>
+  :root{ --sub:#93a0b8; }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(circle at 20% 0%, #16213a 0%, #0b1220 55%);
+    color:#e6e9f2;
+    padding:36px 28px 56px;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  header{text-align:center;margin-bottom:34px}
+  header .badge{
+    display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#c7d2fe;
+    background:rgba(139,92,246,.18);padding:5px 14px;border-radius:20px;
+    border:1px solid rgba(139,92,246,.35);letter-spacing:.5px;text-transform:uppercase;
+    font-weight:700;margin-bottom:12px;
+  }
+  header h1{
+    margin:0 0 8px;font-size:28px;font-weight:800;
+    background:linear-gradient(135deg,#fff 0%,#c7d2fe 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  }
+  header p{margin:0;color:var(--sub);font-size:14px}
+
+  .flow{display:flex;flex-direction:column;gap:0}
+  .row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;align-items:stretch}
+  .arrow{display:flex;justify-content:center;margin:4px 0;color:#5b6b8c;font-size:22px}
+  .arrow::after{content:"↓"}
+
+  .stage-label{
+    text-align:center;font-size:10.5px;font-weight:700;letter-spacing:1.6px;
+    text-transform:uppercase;color:#7c8db0;margin:0 0 10px;
+  }
+
+  .card{
+    border-radius:12px;padding:16px 20px;min-width:160px;flex:1 1 160px;max-width:220px;
+    box-shadow:0 4px 18px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);
+    display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;
+    gap:4px;
+  }
+  .card .icon{font-size:20px;margin-bottom:2px}
+  .card h3{margin:0;font-size:13.5px;font-weight:750;color:#fff}
+  .card p{margin:0;font-size:10.5px;color:rgba(255,255,255,.78);line-height:1.4}
+
+  .c-slate{background:linear-gradient(135deg,#334155,#1e293b)}
+  .c-blue{background:linear-gradient(135deg,#2563eb,#1d4ed8)}
+  .c-cyan{background:linear-gradient(135deg,#0891b2,#0e7490)}
+  .c-teal{background:linear-gradient(135deg,#14b8a6,#0f766e)}
+  .c-emerald{background:linear-gradient(135deg,#10b981,#047857)}
+  .c-violet{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}
+  .c-indigo{background:linear-gradient(135deg,#6366f1,#4338ca)}
+  .c-amber{background:linear-gradient(135deg,#f59e0b,#b45309)}
+  .c-rose{background:linear-gradient(135deg,#f43f5e,#be123c)}
+  .c-orange{background:linear-gradient(135deg,#fb923c,#c2410c)}
+  .c-pink{background:linear-gradient(135deg,#ec4899,#be185d)}
+  .c-sky{background:linear-gradient(135deg,#38bdf8,#0369a1)}
+
+  .wide{max-width:520px!important;flex:1 1 100%}
+
+  /* ---------------- Agents umbrella (the centerpiece) ---------------- */
+  .umbrella{
+    border:1.5px dashed rgba(129,140,248,.55);
+    border-radius:22px;
+    padding:26px 26px 22px;
+    background:radial-gradient(circle at 50% 0%, rgba(99,102,241,.14), rgba(99,102,241,.03) 70%);
+    max-width:980px;margin:0 auto;position:relative;
+  }
+  .umbrella-tag{
+    position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(135deg,#6366f1,#4338ca);
+    color:#fff;font-size:10.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
+    padding:5px 16px;border-radius:20px;box-shadow:0 4px 14px rgba(67,56,202,.5);
+    white-space:nowrap;
+  }
+  .router{
+    display:flex;flex-direction:column;align-items:center;gap:6px;margin:14px auto 10px;
+  }
+  .router .chip{
+    background:linear-gradient(135deg,#818cf8,#4f46e5);
+    color:#fff;font-weight:750;font-size:13px;padding:10px 22px;border-radius:30px;
+    box-shadow:0 6px 20px rgba(79,70,229,.45);
+  }
+  .router .caption{font-size:11px;color:var(--sub);max-width:460px;text-align:center;line-height:1.5}
+
+  .stem{width:1px;height:22px;background:linear-gradient(#818cf8,rgba(129,140,248,.2));margin:0 auto}
+
+  .sub-row{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+  .sub-umbrella{
+    flex:1 1 300px;max-width:420px;border-radius:16px;padding:16px 16px 14px;
+    border:1px solid rgba(255,255,255,.12);position:relative;
+  }
+  .sub-umbrella.product{background:rgba(139,92,246,.09)}
+  .sub-umbrella.recon{background:rgba(245,158,11,.09)}
+  .sub-umbrella::before{
+    content:"";position:absolute;top:-22px;left:50%;width:1px;height:22px;
+    background:linear-gradient(rgba(129,140,248,.15),#818cf8);transform:translateX(-50%);
+  }
+  .sub-title{
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    font-size:12.5px;font-weight:750;color:#fff;margin-bottom:4px;
+  }
+  .sub-title .dot{width:8px;height:8px;border-radius:50%}
+  .sub-desc{font-size:10.5px;color:var(--sub);text-align:center;margin:0 0 12px;line-height:1.4}
+  .chip-grid{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+  .chip-mini{
+    font-size:10.5px;font-weight:600;padding:6px 11px;border-radius:16px;color:#fff;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);
+  }
+  .product .chip-mini{background:rgba(139,92,246,.28);border-color:rgba(196,181,253,.35)}
+  .recon .chip-mini{background:rgba(245,158,11,.28);border-color:rgba(253,230,138,.35)}
+
+  .fanout-note{
+    text-align:center;font-size:10.5px;color:#8b96b3;margin-top:16px;font-style:italic;
+  }
+
+  /* ---------------- Sage badge ---------------- */
+  .sage-badge,.tool-badge{
+    margin-top:8px;display:inline-flex;align-items:center;gap:5px;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);
+    padding:3px 10px;border-radius:12px;font-size:10px;font-weight:800;letter-spacing:.4px;
+  }
+
+  .observability{
+    margin-top:40px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.22);
+    border-radius:16px;padding:20px 24px 24px;
+  }
+  .obs-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+  .obs-head .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .obs-head h4{margin:0;font-size:14px;font-weight:750;color:#fff}
+  .obs-head .obs-sub{font-size:11.5px;color:var(--sub)}
+  .obs-row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+  .obs-shot{margin:0;flex:1 1 380px;max-width:520px}
+  .obs-shot img{
+    width:100%;display:block;border-radius:10px;border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 8px 24px rgba(0,0,0,.45);
+  }
+  .obs-shot figcaption{margin-top:8px;font-size:11px;color:var(--sub);text-align:center;line-height:1.4}
+  .obs-shot figcaption b{color:#dfe4f0}
+
+  footer{text-align:center;margin-top:40px;font-size:11px;color:#5b6b8c}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge">◆ Healthcare Intelligence Platform</div>
+    <h1>Raw Data → Semantic Layer → Agents → Anywhere</h1>
+    <p>A high-level look at how clinical data becomes an AI-queryable product, and how that product is reached.</p>
+  </header>
+
+  <div class="flow">
+
+    <div class="stage-label">Ingest</div>
+    <div class="row">
+      <div class="card c-slate wide">
+        <div class="icon">📥</div>
+        <h3>Raw Data Lands Untouched</h3>
+        <p>Source files are captured as-is — nothing is transformed yet, so nothing is ever lost</p>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <div class="stage-label">Structure</div>
+    <div class="row">
+      <div class="card c-blue">
+        <div class="icon">🧩</div>
+        <h3>Foundation Layer</h3>
+        <p>Split into one clean table per clinical concept</p>
+      </div>
+      <div class="card c-rose">
+        <div class="icon">✅</div>
+        <h3>Reconciliation</h3>
+        <p>A parallel check that nothing dropped along the way</p>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <div class="stage-label">Curate</div>
+    <div class="row">
+      <div class="card c-cyan wide">
+        <div class="icon">🗂️</div>
+        <h3>Access Layer</h3>
+        <p>Typed, business-friendly views — one per data product</p>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <div class="stage-label">Model</div>
+    <div class="row">
+      <div class="card c-teal wide">
+        <div class="icon">📐</div>
+        <h3>Semantic Layer</h3>
+        <p>A shared vocabulary — metrics, dimensions &amp; business terms — defined once on top of the Access layer, so anything downstream can reuse it, not just agents</p>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <div class="stage-label">Reason</div>
+
+    <!-- ===================== AGENTS UMBRELLA ===================== -->
+    <div class="umbrella">
+      <div class="umbrella-tag">Intelligence Agents</div>
+
+      <div class="router">
+        <div class="chip">🧭 Orchestrator / Router</div>
+        <div class="caption">Reads the question, figures out the intent, and decides which engine(s) underneath should answer it</div>
+      </div>
+
+      <div class="stem"></div>
+
+      <div class="sub-row">
+        <div class="sub-umbrella product">
+          <div class="sub-title"><span class="dot" style="background:#a78bfa"></span>Product Agents Engine</div>
+          <div class="sub-desc">One specialist per clinical domain — the orchestrator can call one, or several at once, for cross-domain questions</div>
+          <div class="chip-grid">
+            <span class="chip-mini">Visits</span>
+            <span class="chip-mini">Diagnoses</span>
+            <span class="chip-mini">Medications</span>
+            <span class="chip-mini">Claims</span>
+            <span class="chip-mini">Observations</span>
+            <span class="chip-mini">Procedures</span>
+          </div>
+        </div>
+        <div class="sub-umbrella recon">
+          <div class="sub-title"><span class="dot" style="background:#fbbf24"></span>Reconciliation Engine</div>
+          <div class="sub-desc">A separate specialist for pipeline-health questions — a different audience (data engineers), kept out of the clinical path</div>
+          <div class="chip-grid">
+            <span class="chip-mini">Pipeline Health</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fanout-note">Same question in → the router silently picks the right specialist(s) → one synthesized answer out</div>
+    </div>
+    <!-- =================== END AGENTS UMBRELLA ==================== -->
+
+    <div class="arrow"></div>
+
+    <div class="stage-label">Reach</div>
+    <div class="row">
+      <div class="card c-emerald">
+        <div class="icon">💬</div>
+        <h3>Chat App
+          <div class="tool-badge">✦ Streamlit</div>
+        </h3>
+        <p>A branded conversational UI for business users</p>
+      </div>
+      <div class="card c-sky">
+        <div class="icon">🖥️</div>
+        <h3>Native Console
+          <div class="tool-badge">✦ Snowsight</div>
+        </h3>
+        <p>Ask directly inside the platform, no app to build</p>
+      </div>
+      <div class="card c-orange">
+        <div class="icon">⌨️</div>
+        <h3>Direct Query
+          <div class="tool-badge">✦ SnowSQL</div>
+        </h3>
+        <p>Call the agent from any query tool or pipeline</p>
+      </div>
+      <div class="card c-pink">
+        <div class="icon">🔌</div>
+        <h3>MCP Server
+          <div class="sage-badge">✦ codename: SAGE</div>
+        </h3>
+        <p>Our own internal gateway exposing the agent as a standard tool over MCP</p>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <div class="row">
+      <div class="card c-slate wide">
+        <div class="icon">🌐</div>
+        <h3>External Clients</h3>
+        <p>Claude Desktop, custom apps, Slack bots — anything that speaks MCP, talking to the same brain</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="observability">
+    <div class="obs-head">
+      <span class="dot" style="background:#22c55e"></span>
+      <h4>Built-in Observability</h4>
+      <span class="obs-sub">— every conversation is logged and traced automatically, no setup required</span>
+    </div>
+    <div class="obs-row">
+      <figure class="obs-shot">
+        <img src="images/observability_agent_threads.png" alt="Agent threads / sessions list">
+        <figcaption><b>Threads</b> — every question asked, by whom, and when</figcaption>
+      </figure>
+      <figure class="obs-shot">
+        <img src="images/observability_trace_detail.png" alt="Agent trace detail view">
+        <figcaption><b>Trace</b> — planning → query → chart → response, with model &amp; token usage per step</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <footer>Healthcare Intelligence Platform — Semantic Layer · Intelligence Agents · SAGE (MCP)</footer>
+</div>
+</body>
+</html>
