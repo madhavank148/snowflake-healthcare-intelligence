@@ -52,5 +52,7 @@ CREATE OR REPLACE AGENT SEMANTIC.RECONCILIATION_AGENT
   tool_resources:
     Reconciliation_Analyst:
       semantic_view: "HEALTHCARE_INTELLIGENCE_DB.SEMANTIC.SV_RECONCILIATION"
-      warehouse: "COMPUTE_WH"
+      execution_environment:
+        type: warehouse
+        warehouse: "COMPUTE_WH"
   $$;
