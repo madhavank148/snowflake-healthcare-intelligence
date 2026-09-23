@@ -32,3 +32,5 @@ entities:
         with_grant_option: false
       - role: USERADMIN
         with_grant_option: false
+      - role: ACCOUNTADMIN
+        with_grant_option: true

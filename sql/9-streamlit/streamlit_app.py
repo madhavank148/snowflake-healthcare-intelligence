@@ -186,7 +186,10 @@ with st.sidebar:
     st.markdown("### :material/lightbulb: Quick questions")
     for q in SAMPLE_QUESTIONS:
         if st.button(q, key=f"sample_{q}", use_container_width=True):
-            st.session_state["prefill_question"] = q
+            # Directly add user message and set flag for agent call
+            st.session_state.messages.append({"role": "user", "content": q})
+            st.session_state["pending_question"] = q
+            st.rerun()
 
     st.space("large")
     if st.button(":material/delete: Clear chat", use_container_width=True):
@@ -198,28 +201,14 @@ with st.sidebar:
 # Helpers
 # ---------------------------------------------------------------------------
 def call_agent(agent_fqn: str, question: str, history: list = None) -> dict:
-    """Call a Cortex Agent via DATA_AGENT_RUN with optional conversation history."""
-    messages = []
-    # Include last 5 turns max to avoid payload size limits
-    if history:
-        recent = [m for m in history if m["role"] in ("user", "assistant")][-10:]
-        for msg in recent:
-            if msg["role"] == "user":
-                messages.append({
-                    "role": "user",
-                    "content": [{"type": "text", "text": msg["content"]}]
-                })
-            elif msg["role"] == "assistant":
-                messages.append({
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": msg["content"][:2000]}]
-                })
-    messages.append({
+    """Call a Cortex Agent via DATA_AGENT_RUN. Each call is independent (no history)."""
+    # Note: multi-turn history disabled — DATA_AGENT_RUN treats each call as fresh.
+    # For follow-ups, rephrase the question to include context.
+    messages = [{
         "role": "user",
         "content": [{"type": "text", "text": question}]
-    })
+    }]
     payload = json.dumps({"messages": messages})
-    # Escape any $$ sequences in the payload to prevent breaking Snowflake dollar-quoting
     safe_payload = payload.replace("$$", "$ $")
     sql = f"""
     SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
@@ -274,18 +263,16 @@ def extract_tool_calls(response: dict) -> list[str]:
 
 
 def extract_text(response: dict) -> str:
-    """Extract the assistant's final text response (skip intermediate thinking)."""
+    """Extract the assistant's text response."""
     texts = []
     for block in get_content_blocks(response):
         if block.get("type") == "text":
-            texts.append(block.get("text", ""))
+            t = block.get("text", "").strip()
+            if t:
+                texts.append(t)
     if not texts:
-        return "No response text found."
-    # Keep substantive text blocks; fall back to last block if all are short
-    final_texts = [t for t in texts if len(t) > 50]
-    if not final_texts:
-        final_texts = texts[-1:]
-    return "\n\n".join(final_texts)
+        return ""
+    return "\n\n".join(texts)
 
 
 def extract_sql(response: dict) -> list[str]:
@@ -521,8 +508,6 @@ def auto_chart(df: pd.DataFrame, chart_key: str = ""):
 # ---------------------------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "prefill_question" not in st.session_state:
-    st.session_state.prefill_question = None
 
 # ---------------------------------------------------------------------------
 # Tabs: Chat | History
@@ -538,7 +523,11 @@ with tab_chat:
     for msg_idx, entry in enumerate(st.session_state.messages):
         role = entry["role"]
         with st.chat_message(role, avatar=":material/person:" if role == "user" else ":material/smart_toy:"):
-            st.markdown(entry["content"])
+            if role == "assistant" and entry.get("elapsed"):
+                st.caption(f"Answered in {entry['elapsed']}s")
+
+            if entry["content"]:
+                st.markdown(entry["content"])
 
             if role == "assistant":
                 # Replay Vega charts if saved
@@ -566,85 +555,87 @@ with tab_chat:
                             st.code(sql_stmt, language="sql")
 
                 if entry.get("tools_called"):
-                    with st.expander(":material/account_tree: Agent routing", expanded=False):
+                    with st.expander(":material/account_tree: Agent routing", expanded=(msg_idx == len(st.session_state.messages) - 1)):
                         render_lineage(entry["tools_called"])
 
+                # Suggested follow-ups (only for the latest message)
+                if entry.get("suggested") and msg_idx == len(st.session_state.messages) - 1:
+                    st.markdown("**Suggested follow-ups:**")
+                    cols = st.columns(len(entry["suggested"]))
+                    for s_idx, (col, sq) in enumerate(zip(cols, entry["suggested"])):
+                        with col:
+                            if st.button(sq, key=f"sug_{msg_idx}_{s_idx}", use_container_width=True):
+                                st.session_state.messages.append({"role": "user", "content": sq})
+                                st.session_state["pending_question"] = sq
+                                st.rerun()
+
     # Input handling
-    prefill = st.session_state.pop("prefill_question", None)
-    if prefill:
-        question = prefill
-    else:
-        question = st.chat_input("Ask your healthcare data a question...")
+    pending = st.session_state.pop("pending_question", None)
+    question = pending or st.chat_input("Ask your healthcare data a question...")
 
     if question:
-        st.session_state.messages.append({"role": "user", "content": question})
-        with st.chat_message("user", avatar=":material/person:"):
-            st.write(question)
+        # Add user message if not already added (sidebar buttons add it before rerun)
+        if not pending:
+            st.session_state.messages.append({"role": "user", "content": question})
 
+        # Call agent
         agent_fqn = AGENTS[agent_choice]
-        with st.chat_message("assistant", avatar=":material/smart_toy:"):
-            with st.spinner("Thinking..."):
-                t0 = time.time()
-                try:
-                    response = call_agent(agent_fqn, question, history=st.session_state.messages[:-1])
-                except Exception as e:
-                    st.error(f"Agent call failed: {e}")
-                    st.stop()
-                elapsed = round(time.time() - t0, 1)
+        with st.spinner("Thinking..."):
+            t0 = time.time()
+            try:
+                response = call_agent(agent_fqn, question)
+            except Exception as e:
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": f":material/error: Agent call failed: {e}",
+                    "tools_called": [],
+                    "sql_statements": [],
+                    "dataframes": [],
+                    "vega_charts": [],
+                    "elapsed": 0,
+                })
+                st.rerun()
+            elapsed = round(time.time() - t0, 1)
 
-            st.caption(f"Answered in {elapsed}s")
-
-            text = extract_text(response)
-            tools_called = extract_tool_calls(response)
-            sql_statements = extract_sql(response)
-            data_frames = extract_data(response)
-            vega_charts = extract_vega_charts(response)
-            suggested = extract_suggested_queries(response)
-
-            st.markdown(text)
-
-            if vega_charts:
-                for spec in vega_charts:
-                    st.vega_lite_chart(spec, use_container_width=True)
-
-            if data_frames:
-                for idx, (title, df) in enumerate(data_frames):
-                    st.markdown(f"**{title}**")
-                    if vega_charts:
-                        st.dataframe(df, use_container_width=True, hide_index=True)
-                    else:
-                        chart_col, table_col = st.columns([3, 2])
-                        with chart_col:
-                            auto_chart(df, chart_key=f"live_{idx}")
-                        with table_col:
-                            st.dataframe(df, use_container_width=True, hide_index=True)
-
-            if sql_statements:
-                with st.expander(":material/code: Generated SQL", expanded=False):
-                    for sql_stmt in sql_statements:
-                        st.code(sql_stmt, language="sql")
-
-            if tools_called:
-                with st.expander(":material/account_tree: Agent routing", expanded=True):
-                    render_lineage(tools_called)
-
-            if suggested:
-                st.markdown("**Suggested follow-ups:**")
-                cols = st.columns(len(suggested))
-                for s_idx, (col, sq) in enumerate(zip(cols, suggested)):
-                    with col:
-                        if st.button(sq, key=f"sug_{s_idx}_{hash(sq) % 10000}", use_container_width=True):
-                            st.session_state["prefill_question"] = sq
-
+        # Check if response is an error
+        if isinstance(response, dict) and (response.get("error") or response.get("code") or response.get("error_code")):
+            err_msg = response.get("message") or response.get("error") or str(response)
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": text,
-                "tools_called": tools_called,
-                "sql_statements": sql_statements,
-                "dataframes": [(t, df.to_dict("records")) for t, df in data_frames] if data_frames else [],
-                "vega_charts": vega_charts if vega_charts else [],
+                "content": f"**Agent error:** {err_msg}",
+                "tools_called": [],
+                "sql_statements": [],
+                "dataframes": [],
+                "vega_charts": [],
+                "elapsed": elapsed,
             })
+            st.rerun()
 
+        # Extract response parts
+        text = extract_text(response)
+        tools_called = extract_tool_calls(response)
+        sql_statements = extract_sql(response)
+        data_frames = extract_data(response)
+        vega_charts = extract_vega_charts(response)
+        suggested = extract_suggested_queries(response)
+
+        # Fallback text if agent returned nothing
+        if not text and not data_frames and not vega_charts:
+            text = "_The agent completed but returned no data. Try rephrasing your question._"
+        elif not text and (data_frames or vega_charts):
+            text = "Here are the results:"
+
+        # Save assistant response to history
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": text,
+            "tools_called": tools_called,
+            "sql_statements": sql_statements,
+            "dataframes": [(t, df.to_dict("records")) for t, df in data_frames] if data_frames else [],
+            "vega_charts": vega_charts if vega_charts else [],
+            "suggested": suggested,
+            "elapsed": elapsed,
+        })
         st.rerun()
 
 # ======================== TAB: HISTORY =====================================
