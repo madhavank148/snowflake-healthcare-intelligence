@@ -1,4 +1,3 @@
-# created-by: streamlit-in-workspaces; skill-version=1.0.0
 definition_version: 2
 entities:
   streamlit_app:
@@ -8,3 +7,28 @@ entities:
       - pyproject.toml
       - streamlit_app.py
       - .streamlit/config.toml
+    identifier:
+      database: HEALTHCARE_INTELLIGENCE_DB
+      schema: SEMANTIC
+      name: STREAMLIT
+    title: 9-streamlit
+    query_warehouse: COMPUTE_WH
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    run_mode: SpcsOnly
+    execute_as: OWNER
+    artifact_repositories:
+      - SNOWFLAKE.SNOWPARK.ANACONDA_SHARED_REPOSITORY
+      - SNOWFLAKE.SNOWPARK.PYPI_SHARED_REPOSITORY
+    sharing:
+      - role: PUBLIC
+        with_grant_option: false
+      - role: SECURITYADMIN
+        with_grant_option: false
+      - role: ORGADMIN
+        with_grant_option: false
+      - role: SNOWFLAKE_LEARNING_ROLE
+        with_grant_option: false
+      - role: SYSADMIN
+        with_grant_option: false
+      - role: USERADMIN
+        with_grant_option: false
