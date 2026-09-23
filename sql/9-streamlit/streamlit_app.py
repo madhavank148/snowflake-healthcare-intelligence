@@ -191,64 +191,141 @@ def call_agent(agent_fqn: str, question: str) -> dict:
     return json.loads(raw) if isinstance(raw, str) else raw
 
 
-def extract_tool_calls(response: dict) -> list[str]:
-    """Return list of tool names called from the agent response."""
-    tools = []
+def get_content_blocks(response: dict) -> list[dict]:
+    """Get the content blocks from the response, handling both formats."""
+    # DATA_AGENT_RUN returns: {"content": [...], "role": "assistant", ...}
+    if "content" in response and isinstance(response["content"], list):
+        return response["content"]
+    # Fallback: wrapped in messages array
     for msg in response.get("messages", []):
-        if msg.get("role") == "assistant":
-            for block in msg.get("content", []):
-                if block.get("type") == "tool_use":
-                    tools.append(block.get("name", ""))
-                if block.get("type") == "tool_results":
-                    name = block.get("name", "")
-                    if name:
-                        tools.append(name)
-    # Also check top-level tool_results / tool_calls
-    for item in response.get("tool_results", []):
-        if isinstance(item, dict) and item.get("name"):
-            tools.append(item["name"])
-    return list(dict.fromkeys(tools))  # unique, preserving order
+        if msg.get("role") == "assistant" and "content" in msg:
+            return msg["content"]
+    return []
+
+
+def extract_tool_calls(response: dict) -> list[str]:
+    """Return list of analyst tool names called, inferred from multiple sources."""
+    tools = []
+    for block in get_content_blocks(response):
+        # Direct tool_use blocks (Intelligence Agent routing)
+        if block.get("type") == "tool_use":
+            tool_info = block.get("tool_use", block)
+            name = tool_info.get("name", "")
+            if name and name not in ("system_execute_sql", "data_to_chart"):
+                tools.append(name)
+            # For system_execute_sql, infer analyst from semantic_model field
+            if name == "system_execute_sql":
+                sm = tool_info.get("input", {}).get("semantic_model", "")
+                if sm:
+                    tools.append(sm)
+            if name == "data_to_chart":
+                tools.append("data_to_chart")
+        # Tool result blocks
+        if block.get("type") == "tool_result":
+            tool_info = block.get("tool_result", block)
+            name = tool_info.get("name", "")
+            if name and name not in ("system_execute_sql", "data_to_chart"):
+                tools.append(name)
+            if name == "data_to_chart":
+                tools.append("data_to_chart")
+    return list(dict.fromkeys(tools))
 
 
 def extract_text(response: dict) -> str:
-    """Extract the assistant's text response."""
+    """Extract the assistant's final text response (skip intermediate thinking)."""
     texts = []
-    for msg in response.get("messages", []):
-        if msg.get("role") == "assistant":
-            for block in msg.get("content", []):
-                if block.get("type") == "text":
-                    texts.append(block.get("text", ""))
-    return "\n\n".join(texts) if texts else str(response)
+    for block in get_content_blocks(response):
+        if block.get("type") == "text":
+            texts.append(block.get("text", ""))
+    # Only keep the substantive text blocks (skip short routing messages)
+    final_texts = [t for t in texts if len(t) > 50] or texts[-1:] if texts else []
+    return "\n\n".join(final_texts) if final_texts else "No response text found."
 
 
 def extract_sql(response: dict) -> list[str]:
-    """Extract any SQL statements from tool results."""
+    """Extract SQL statements from system_execute_sql tool results."""
     sqls = []
-    for msg in response.get("messages", []):
-        for block in msg.get("content", []):
-            if block.get("type") == "tool_results":
-                for res in block.get("content", []):
-                    if isinstance(res, dict) and res.get("type") == "sql":
-                        sqls.append(res.get("statement", ""))
-            if isinstance(block, dict):
-                stmt = block.get("statement", "")
-                if stmt:
-                    sqls.append(stmt)
-    return sqls
+    for block in get_content_blocks(response):
+        if block.get("type") == "tool_result":
+            tool_info = block.get("tool_result", block)
+            if tool_info.get("name") == "system_execute_sql":
+                for item in tool_info.get("content", []):
+                    if isinstance(item, dict) and item.get("type") == "json":
+                        sql = item.get("json", {}).get("sql", "")
+                        if sql:
+                            sqls.append(sql)
+        # Also check tool_use blocks for the SQL input
+        if block.get("type") == "tool_use":
+            tool_info = block.get("tool_use", block)
+            if tool_info.get("name") == "system_execute_sql":
+                sql = tool_info.get("input", {}).get("sql", "")
+                if sql:
+                    sqls.append(sql)
+    return list(dict.fromkeys(sqls))  # deduplicate
 
 
-def extract_data(response: dict) -> list[pd.DataFrame]:
-    """Extract data results as DataFrames."""
+def extract_data(response: dict) -> list[tuple[str, pd.DataFrame]]:
+    """Extract data results as (title, DataFrame) tuples from table blocks and tool results."""
     frames = []
-    for msg in response.get("messages", []):
-        for block in msg.get("content", []):
-            if block.get("type") == "tool_results":
-                for res in block.get("content", []):
-                    if isinstance(res, dict) and res.get("type") == "data":
-                        data = res.get("data", [])
-                        if data:
-                            frames.append(pd.DataFrame(data))
+    for block in get_content_blocks(response):
+        # Explicit table blocks (agent formats these for display)
+        if block.get("type") == "table":
+            table_info = block.get("table", {})
+            title = table_info.get("title", "Results")
+            rs = table_info.get("result_set", {})
+            col_names = [c["name"] for c in rs.get("resultSetMetaData", {}).get("rowType", [])]
+            data = rs.get("data", [])
+            if data and col_names:
+                df = pd.DataFrame(data, columns=col_names)
+                # Convert numeric columns
+                for col_meta in rs.get("resultSetMetaData", {}).get("rowType", []):
+                    if col_meta.get("type") == "fixed":
+                        try:
+                            df[col_meta["name"]] = pd.to_numeric(df[col_meta["name"]])
+                        except (ValueError, KeyError):
+                            pass
+                frames.append((title, df))
+        # Also pull from system_execute_sql results (for single-row summaries)
+        if block.get("type") == "tool_result":
+            tool_info = block.get("tool_result", block)
+            if tool_info.get("name") == "system_execute_sql":
+                for item in tool_info.get("content", []):
+                    if isinstance(item, dict) and item.get("type") == "json":
+                        rs = item.get("json", {}).get("result_set", {})
+                        col_names = [c["name"] for c in rs.get("resultSetMetaData", {}).get("rowType", [])]
+                        data = rs.get("data", [])
+                        if data and col_names and len(data) > 1:
+                            df = pd.DataFrame(data, columns=col_names)
+                            for col_meta in rs.get("resultSetMetaData", {}).get("rowType", []):
+                                if col_meta.get("type") == "fixed":
+                                    try:
+                                        df[col_meta["name"]] = pd.to_numeric(df[col_meta["name"]])
+                                    except (ValueError, KeyError):
+                                        pass
+                            frames.append(("Results", df))
     return frames
+
+
+def extract_vega_charts(response: dict) -> list[dict]:
+    """Extract Vega-Lite chart specs from chart blocks."""
+    charts = []
+    for block in get_content_blocks(response):
+        if block.get("type") == "chart":
+            spec_str = block.get("chart", {}).get("chart_spec", "")
+            if spec_str:
+                try:
+                    charts.append(json.loads(spec_str))
+                except json.JSONDecodeError:
+                    pass
+    return charts
+
+
+def extract_suggested_queries(response: dict) -> list[str]:
+    """Extract suggested follow-up queries."""
+    for block in get_content_blocks(response):
+        if block.get("type") == "suggested_queries":
+            return [q.get("query", "") for q in block.get("suggested_queries", []) if q.get("query")]
+    return []
 
 
 def render_lineage(tools_called: list[str]):
@@ -397,7 +474,9 @@ for entry in st.session_state.messages:
         # Re-render visuals for assistant messages
         if role == "assistant":
             if entry.get("dataframes"):
-                for df in entry["dataframes"]:
+                for title, df_data in entry["dataframes"]:
+                    df = pd.DataFrame(df_data) if isinstance(df_data, list) else df_data
+                    st.markdown(f"**{title}**")
                     chart_col, table_col = st.columns([3, 2])
                     with chart_col:
                         auto_chart(df)
@@ -443,19 +522,32 @@ if question:
         text = extract_text(response)
         tools_called = extract_tool_calls(response)
         sql_statements = extract_sql(response)
-        dataframes = extract_data(response)
+        data_frames = extract_data(response)
+        vega_charts = extract_vega_charts(response)
+        suggested = extract_suggested_queries(response)
 
         # Render text response
         st.markdown(text)
 
-        # Render data + charts
-        if dataframes:
-            for df in dataframes:
-                chart_col, table_col = st.columns([3, 2])
-                with chart_col:
-                    auto_chart(df)
-                with table_col:
+        # Render Vega-Lite charts from agent (preferred — agent-generated)
+        if vega_charts:
+            for spec in vega_charts:
+                st.vega_lite_chart(spec, use_container_width=True)
+
+        # Render data tables + fallback Plotly charts
+        if data_frames:
+            for title, df in data_frames:
+                st.markdown(f"**{title}**")
+                if vega_charts:
+                    # Agent already provided a chart, just show the table
                     st.dataframe(df, use_container_width=True, hide_index=True)
+                else:
+                    # No agent chart — generate our own
+                    chart_col, table_col = st.columns([3, 2])
+                    with chart_col:
+                        auto_chart(df)
+                    with table_col:
+                        st.dataframe(df, use_container_width=True, hide_index=True)
 
         # SQL accordion
         if sql_statements:
@@ -464,11 +556,18 @@ if question:
                     st.code(sql_stmt, language="sql")
 
         # Agent routing lineage
-        if agent_fqn == INTELLIGENCE_AGENT and tools_called:
+        if tools_called:
             with st.expander(":material/account_tree: Agent routing", expanded=True):
                 render_lineage(tools_called)
-        elif tools_called:
-            st.caption(f"Tool used: {', '.join(tools_called)}")
+
+        # Suggested follow-up questions
+        if suggested:
+            st.markdown("**Suggested follow-ups:**")
+            cols = st.columns(len(suggested))
+            for col, sq in zip(cols, suggested):
+                with col:
+                    if st.button(sq, key=f"sug_{sq[:30]}", use_container_width=True):
+                        st.session_state["prefill_question"] = sq
 
         # Save to session
         st.session_state.messages.append({
@@ -476,7 +575,7 @@ if question:
             "content": text,
             "tools_called": tools_called,
             "sql_statements": sql_statements,
-            "dataframes": [df.to_dict("records") for df in dataframes] if dataframes else [],
+            "dataframes": [(t, df.to_dict("records")) for t, df in data_frames] if data_frames else [],
         })
 
     st.rerun()
